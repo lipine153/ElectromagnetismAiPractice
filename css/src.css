@@ -1,0 +1,135 @@
+#mainhead{
+    /* 字体设置 */
+    font-family: "Heiti SC", "SimHei", sans-serif;
+    
+    font-weight: 500; /* H1必须加粗，600/700，不要normal */
+    font-size: 3rem; /* 响应式字号，自动适配手机/电脑 */
+    line-height: 1.2; /* 标题行高紧凑，避免松散 */
+    
+    /* 排版美化 */
+    letter-spacing: 0.5px; /* 轻微字间距，高级感 */
+    text-align: center; /* 文字居中对齐 */
+    color: rgba(255, 255, 255, 0.75); /* 文字颜色，白色 */
+    margin-top: 0.5em;
+
+}
+body {
+    font-family: "Microsoft Yahei", sans-serif;
+    background: black;
+    color: #fff;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+#particles {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+.container { position: relative; z-index: 1; }
+
+/* 拖拽数值选项 */
+.num-item {
+    user-select: none;
+    cursor: grab;
+    background: linear-gradient(135deg, #1e40af, #7c3aed);
+    border: 2px solid #a78bfa;
+    padding: 10px 18px;
+    border-radius: 12px;
+    box-shadow: 0 0 12px #8b5cf6;
+    transition: all 0.2s ease;
+    font-size: 16px;
+}
+.num-item:active { cursor: grabbing; transform: scale(1.05); }
+.num-item.correct { border-color: #22c55e; box-shadow: 0 0 18px #22c55e; }
+.num-item.wrong { border-color: #ef4444; box-shadow: 0 0 18px #ef4444; animation: shake 0.4s; }
+
+/* 答题放置区（填计算结果） */
+.calc-area {
+    border: 2px dashed white;
+    border-radius: 14px;
+    min-height: 65px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    transition: all 0.3s;
+    background: rgba(99, 102, 241, 0.1);
+}
+.calc-area.hover {
+    border-color: white;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: inset 0 0 12px white;
+}
+
+/* 物理模型样式 */
+.sphere-box { position: relative; width: 340px; height: 340px; margin: 0 auto; }
+.sphere {
+    border-radius: 50%;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid #60a5fa;
+    background: radial-gradient(circle, rgba(96,165,250,0.12) 0%, transparent 70%);
+}
+.coil {
+    width: 10em; height: 10em;
+    border: 3px solid #34d399;
+    border-radius: 50%;
+    position: relative;
+    background: rgba(52, 211, 153, 0.08);
+}
+
+/* 动画 */
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+@keyframes glow {
+    0%,100% { box-shadow: 0 0 10px white; }
+    50% { box-shadow: 0 0 22px white, 0 0 35px white; }
+}
+.glow-anim { animation: glow 2s infinite; }
+
+/* 场线动画 电场/磁感线 */
+.field-line {
+    position: absolute;
+    background: linear-gradient(90deg, transparent, #93c5fd, transparent);
+    height: 2px;
+    animation: fieldMove 3s linear infinite;
+}
+@keyframes fieldMove {
+    0% { opacity: 0.2; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.2; }
+}
+
+/* 弹窗 */
+.modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.3s;
+}
+.modal.show { opacity: 1; pointer-events: all; }
+
+/* 公式文本样式 */
+.formula {
+    color: #fcd34d;
+    font-weight: bold;
+    margin: 8px 0;
+    font-size: 15px;
+}
+.param-text {
+    color: #94a3b8;
+    line-height: 1.7;
+}
