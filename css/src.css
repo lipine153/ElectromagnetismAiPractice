@@ -47,7 +47,7 @@ body {
 
 /* 答题放置区（填计算结果） */
 .calc-area {
-    border: 2px dashed white;
+    border: 2px dashed limegreen;
     border-radius: 14px;
     min-height: 65px;
     display: flex;
@@ -58,9 +58,9 @@ body {
     background: rgba(99, 102, 241, 0.1);
 }
 .calc-area.hover {
-    border-color: white;
+    border-color: limegreen;
     background: rgba(255, 255, 255, 0.25);
-    box-shadow: inset 0 0 12px white;
+    box-shadow: inset 0 0 12px limegreen;
 }
 
 /* 物理模型样式 */
@@ -88,8 +88,8 @@ body {
     75% { transform: translateX(8px); }
 }
 @keyframes glow {
-    0%,100% { box-shadow: 0 0 10px white; }
-    50% { box-shadow: 0 0 22px white, 0 0 35px white; }
+    0%,100% { box-shadow: 0 0 10px limegreen; }
+    50% { box-shadow: 0 0 22px limegreen, 0 0 35px limegreen; }
 }
 .glow-anim { animation: glow 2s infinite; }
 

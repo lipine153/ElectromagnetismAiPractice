@@ -11,7 +11,7 @@ class Particle {
         this.r = Math.random()*2+1;
         this.vx = Math.random()*0.4-0.2;
         this.vy = Math.random()*0.4-0.2;
-        this.color = `rgba(139,92,246,${Math.random()*0.5+0.2})`;
+        this.color = `rgba(255,255,255,${Math.random()*0.5+0.2})`;
     }
     draw(){
         ctx.beginPath();
