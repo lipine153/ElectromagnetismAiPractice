@@ -58,14 +58,14 @@ const levelData = [
         title: "第1关 同心导体球电场计算",
         question: `
 高斯定理 \\[\\oint_S \\mathbf{E} \\cdot d\\mathbf{S} = \\frac{q_{\\text{enc}}}{\\epsilon_0}\\]
-内球壳半径 \\(R_1 = 0.1m\\),
-外球壳内半径 \\(R_2 = 0.2m\\),
-电荷量 \\(q = 8 \\times 10^{-9}\\),
-\\(\\epsilon = 8.85 \\times 10^{-12} C^2/(N·m^2)\\),
-\\(\\frac{1}{4\\pi \\epsilon_0} = 9 \\times 10^9 N·m²/C²\\)
+内球壳半径 \\(R_1 = 0.1m\\),电荷量 \\(q = 8 \\times 10^{-9}\\),
+外球壳内半径 \\(R_2 = 0.2m\\),电荷量 \\(-q\\),
 
-\\(R_2\\)区域电场强度 \\(E_1(N/C)\\) 
-区域电场强度\\(E_2(N/C)\\)
+\\(\\frac{1}{4\\pi \\epsilon_0} = 9 \\times 10^9 N·m²/C²\\),
+
+
+求:\\(R_2\\)区域电场强度 \\(E_1(N/C)\\),
+\\(R_1\\)区域电场强度\\(E_2(N/C)\\)
         `,
         options: ["720","1800","0","3600","900"],
         areaNames: ["区域R₁<r<R₂ 电场E₁","区域r>R₂ 电场E₂"],
@@ -77,10 +77,10 @@ const levelData = [
         title: "第2关 介质同心球电场",
         question: `
 介质中电场\\[E = \\frac{q}{4\\pi \\epsilon_0 \\epsilon_r r^2}\\]
-总带电量 \\(q = 4\\pi \\epsilon_0 \\times 2 C \\),
-介质区半径 \\(r = 1m\\),
-内电场 \\(E = 1 (N/C)\\),
-求: 介电常数 \\(\\epsilon_r\\),域电场 \\(E_{true}\\)
+总带电量 \\(q = 8\\pi \\epsilon_0 (C) \\),
+介质区半径 \\(r = 1m\\)(紫色虚线内),
+介质内电场 \\(E = 1 (N/C)\\),
+求: 介电常数 \\(\\epsilon_r\\),介质外电场 \\(E_{true}\\)
         `,
         options: ["1","2","4","0.5","8"],
         areaNames: ["相对介电常数εᵣ","真空区域电场E_true"],
@@ -93,7 +93,7 @@ const levelData = [
         question: `
 \\[\\sigma = \\frac{q}{S},\\quad S=4\\pi R^2\\]
 球体半径 \\(R=0.2,\\text {m}\\),总电荷 \\(q=5\\times 10^{-8}\\text {C}\\)
-电荷面密度 \\(\\sigma\ (\\text {C/m}^2)\\),近似取 \\(4\\pi=12.5\\)
+求:电荷面密度 \\(\\sigma\ (\\text {C/m}^2)\\),近似取 \\(4\\pi=12.5\\)
         `,
         options: ["1e-7","2e-7","5e-8","8e-8","3e-7"],
         areaNames: ["导体球面 σ"],
@@ -105,8 +105,8 @@ const levelData = [
         title: "第4关 导体电势计算",
         question: `
 \\[U = \\dfrac{q}{4\\pi\\epsilon_0 R}\\]
-孤立导体球,\\(q=9\\times 10^{-9}\\,\\text {C}\\),\\(R=0.1\\text {m}\\),\\(\\dfrac {1}{4\\pi\\epsilon_0}=9\\times 10^9\\text {N・m}^2/\\text {C}^2\\)
-求电势 \\(U(V)\\)
+孤立导体球,带电\\(q=9\\times 10^{-9}C\\),\\(R=0.1\\text {m}\\),\\(\\dfrac {1}{4\\pi\\epsilon_0}=9\\times 10^9\\text {N・m}^2/\\text {C}^2\\),
+求导体电势 \\(U\\)
         `,
         options: ["810","900","720","450","1620"],
         areaNames: ["导体电势 U"],
@@ -119,7 +119,7 @@ const levelData = [
         question: `
 \\[B = \\frac{\\mu_0 I}{2\\pi r}\\]\\(\\mu_0=4\\pi\\times 10^{-7}(T·m/A)\\)
 电流 \\(I=10\,\\text {A}\\),距离导线 \\(r=0.2\,\\text {m}\\)
-求磁感应强度 \\(B\ (\\text {T})\\)
+求 \\(r\\) 处磁感应强度 \\(B\ (T)\\)
         `,
         options: ["1e-5","2e-5","4e-5","5e-6","8e-6"],
         areaNames: ["导线外 B"],
@@ -270,7 +270,6 @@ function renderModel(type){
             break;
         case "cavity":
             html = `<div class="sphere-box">
-                        <div class="sphere" style="width:120px;height:120px;border:dashed;"></div>
                         <div class="sphere" style="width:240px;height:240px;"></div>
                     </div><p class="mt-4 text-cyan-200">空腔导体模型</p>`;
             break;
