@@ -7,8 +7,26 @@
         body { margin: 0; overflow: hidden; background: #0a0a0f; }
         canvas { display: block; }
     </style>
+    <link href="css/simulate.css" rel = "stylesheet">
 </head>
 <body>
+<div class="info-panel">
+    <h3>磁偶极子磁场三维可视化</h3>
+    <div class="desc">
+        展示沿 z 轴放置的磁偶极子空间磁力线分布，磁场具有绕 z 轴的旋转对称性。
+    </div>
+    <div>磁感应强度</div>
+    <div class="legend-bar"></div>
+    <div class="legend-label">
+        <span>弱</span>
+        <span>强</span>
+    </div>
+    <div class="tips">
+        左键拖拽：旋转视角<br>
+        滚轮：缩放场景<br>
+        右键拖拽：平移视图
+    </div>
+</div>
 <script type="importmap">
 {
     "imports": {
@@ -91,21 +109,38 @@ FieldLineModule().then(wasm => {
         const colorTmp = new THREE.Color();
 
         let maxB = -Infinity, minB = Infinity;
-        for (let j = 0; j < pointCount; j++) {
-            const b = floatData[j*4 + 3];
-            maxB = Math.max(maxB, b);
-            minB = Math.min(minB, b);
+        for (let i = 0; i < pointCount; i++) {
+            const b = floatData[i*4 + 3];
+            if (isFinite(b) && b > 1e-8) { // 过滤无效值
+                maxB = Math.max(maxB, b);
+                minB = Math.min(minB, b);
+            }
         }
-        const range = maxB - minB || 1;
+        
+        const range = maxB - minB;
+        if (range <= 1e-6) {
+            // 场强几乎无变化时，强制拉开范围，避免全同色
+            minB = maxB * 0.5;
+        }
 
-        for (let j = 0; j < pointCount; j++) {
+        for (let i = 0; i < pointCount; i++) {
             positions.push(
-                floatData[j*4 + 0],
-                floatData[j*4 + 1],
-                floatData[j*4 + 2]
+                floatData[i*4 + 0],
+                floatData[i*4 + 1],
+                floatData[i*4 + 2]
             );
-            const t = (floatData[j*4 + 3] - minB) / range;
-            colorTmp.setHSL(0.65 - 0.65 * t, 1.0, 0.6);
+        
+            // 对数映射：压缩动态范围，让弱场区域的颜色变化清晰可见
+            const b = floatData[i*4 + 3];
+            const safeB = Math.max(b, minB * 0.1); // 避免 log(0)
+            const logB = Math.log10(safeB);
+            const logMin = Math.log10(minB * 0.1);
+            const logMax = Math.log10(maxB);
+            const t = (logB - logMin) / (logMax - logMin);
+        
+            // 限制 t 在 0~1，蓝→青→黄→红渐变
+            const tClamp = Math.max(0, Math.min(1, t));
+            colorTmp.setHSL(0.65 - 0.65 * tClamp, 1.0, 0.6);
             colors.push(colorTmp.r, colorTmp.g, colorTmp.b);
         }
 
@@ -114,11 +149,14 @@ FieldLineModule().then(wasm => {
         geometry.setPositions(positions);
         geometry.setColors(colors);
 
+       // 创建材质和几何体
         const material = new LineMaterial({
             linewidth: 2.5,
-            vertexColors: true,
+            vertexColors: true,    // 开启顶点颜色
+            color: 0xffffff,       // 基础色必须为纯白，否则会叠加染色
             transparent: false,
-            opacity: 0.9
+            opacity: 1.0,
+            dashed: false          // 强制关闭虚线模式
         });
         material.resolution.set(innerWidth, innerHeight);
 
