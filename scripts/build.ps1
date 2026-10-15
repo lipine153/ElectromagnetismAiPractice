@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    构建 C++ -> Wasm 模块（simulate.html 使用）。
+    构建 C++ -> Wasm 模块（模拟页使用）。
 
 .DESCRIPTION
     环境由 pineload 管理，本脚本会自动激活：
@@ -12,17 +12,13 @@
 .PARAMETER Clean
     先删掉 build/ 再重新配置、编译。
 
-.PARAMETER EigenDir
-    Eigen 头文件目录，默认 D:/Dev/Lib/cpp/eigen-5.0.0。
-
 .EXAMPLE
     pwsh -File scripts/build.ps1
     pwsh -File scripts/build.ps1 -Clean
 #>
 [CmdletBinding()]
 param(
-    [switch]$Clean,
-    [string]$EigenDir = 'D:/Dev/Lib/cpp/eigen-5.0.0'
+    [switch]$Clean
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,15 +45,13 @@ if ($Clean -and (Test-Path $BuildDir)) {
     Remove-Item -Recurse -Force $BuildDir
 }
 
-# 清掉旧产物：SINGLE_FILE 构建只产出 .js，避免遗留的 .wasm 与新 .js 混用
+# 先清掉旧产物，避免新旧 .js / .wasm 混用（每次构建都会重新产出这两个文件）
 Remove-Item -Force (Join-Path $BinDir 'field_line.js'), (Join-Path $BinDir 'field_line.wasm') `
     -ErrorAction SilentlyContinue
 
 if (-not (Test-Path (Join-Path $BuildDir 'CMakeCache.txt'))) {
     Write-Host '[build] configure (emcmake + Ninja)' -ForegroundColor Cyan
-    emcmake cmake -S $Root -B $BuildDir -G Ninja `
-        -DCMAKE_BUILD_TYPE=Release `
-        -DEIGEN_DIR="$EigenDir"
+    emcmake cmake -S $Root -B $BuildDir -G Ninja -DCMAKE_BUILD_TYPE=Release
     if ($LASTEXITCODE -ne 0) { throw 'cmake configure 失败' }
 }
 

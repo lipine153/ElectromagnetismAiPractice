@@ -2,34 +2,45 @@
 
 #include "field.hpp"
 
-Eigen::Vector3d rk4Step(const Eigen::Vector3d& pos, double ds) {
-    Eigen::Vector3d k1 = getMagneticField(pos).normalized();
-    Eigen::Vector3d k2 = getMagneticField(pos + 0.5 * ds * k1).normalized();
-    Eigen::Vector3d k3 = getMagneticField(pos + 0.5 * ds * k2).normalized();
-    Eigen::Vector3d k4 = getMagneticField(pos + ds * k3).normalized();
-    return pos + (ds / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4);
+namespace {
+
+Vec3 fieldAt(int field, const Vec3& pos) {
+    return field == kFieldE ? evalE(pos) : evalB(pos);
 }
 
-FieldLine traceLine(const Eigen::Vector3d& start,
-                    double stepSize,
-                    int maxSteps,
-                    double maxRadius) {
-    FieldLine line;
-    line.points.reserve(maxSteps);
-    line.strengths.reserve(maxSteps);
+}  // namespace
 
-    Eigen::Vector3d current = start;
+Vec3 rk4Step(int field, int sign, const Vec3& pos, double ds) {
+    const double s = static_cast<double>(sign);
+    const Vec3 k1 = fieldAt(field, pos).normalized() * s;
+    const Vec3 k2 = fieldAt(field, pos + k1 * (0.5 * ds)).normalized() * s;
+    const Vec3 k3 = fieldAt(field, pos + k2 * (0.5 * ds)).normalized() * s;
+    const Vec3 k4 = fieldAt(field, pos + k3 * ds).normalized() * s;
+    return pos + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * (ds / 6.0);
+}
+
+void traceInto(int field, int sign, const Vec3& seed, double step, int maxSteps, double maxRadius,
+               double stopRadius, std::vector<float>& out) {
+    const std::size_t countSlot = out.size();
+    out.push_back(0.0f);  // 点数占位，结束后回填
+
+    int count = 0;
+    Vec3 current = seed;
     for (int i = 0; i < maxSteps; ++i) {
-        Eigen::Vector3d b = getMagneticField(current);
-        double bNorm = b.norm();
-        if (bNorm < 1e-8) break;
+        const Vec3 f = fieldAt(field, current);
+        const double magnitude = f.norm();
+        if (magnitude < 1e-12) break;  // 到了场的零点，停
+        if (i > 0 && distanceToNearestSource(current) < stopRadius) break;  // 贴到源上，停
 
-        line.points.push_back(current);
-        line.strengths.push_back(bNorm);
+        out.push_back(static_cast<float>(current.x));
+        out.push_back(static_cast<float>(current.y));
+        out.push_back(static_cast<float>(current.z));
+        out.push_back(static_cast<float>(magnitude));
+        ++count;
 
-        current = rk4Step(current, stepSize);
-        // 超出计算区域就终止
-        if (current.norm() > maxRadius) break;
+        current = rk4Step(field, sign, current, step);
+        if (current.norm() > maxRadius) break;  // 跑出计算区域，停
     }
-    return line;
+
+    out[countSlot] = static_cast<float>(count);
 }

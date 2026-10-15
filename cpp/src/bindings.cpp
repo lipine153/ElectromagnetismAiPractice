@@ -1,33 +1,67 @@
-#include "integrator.hpp"
-
 #include <emscripten.h>
 
-#include <cstdlib>
+#include <cstddef>
+#include <vector>
 
-// 对外导出：追踪一条磁力线，返回 float 数组指针
-// 输出格式：每个点占 4 个 float -> x, y, z, 场强大小
+#include "field.hpp"
+#include "integrator.hpp"
+
+namespace {
+
+// C++ 侧持久缓冲：trace_lines 每帧复用，避免反复 malloc/free 与跨界调用。
+std::vector<float> g_out;
+
+}  // namespace
+
+// 上传/替换场源列表。data 为平铺 double，每个源 kSourceStride 个。
 extern "C" EMSCRIPTEN_KEEPALIVE
-float* traceFieldLine(double start_x, double start_y, double start_z,
-                      double step_size, int max_steps, int* out_point_count) {
-    FieldLine line = traceLine(Eigen::Vector3d(start_x, start_y, start_z),
-                               step_size, max_steps);
-
-    const int pointCount = static_cast<int>(line.points.size());
-    *out_point_count = pointCount;
-
-    // 分配连续内存（JS 可直接读取），每个点 4 个 float
-    float* buffer = static_cast<float*>(std::malloc(pointCount * 4 * sizeof(float)));
-    for (int i = 0; i < pointCount; ++i) {
-        buffer[i * 4 + 0] = static_cast<float>(line.points[i].x());
-        buffer[i * 4 + 1] = static_cast<float>(line.points[i].y());
-        buffer[i * 4 + 2] = static_cast<float>(line.points[i].z());
-        buffer[i * 4 + 3] = static_cast<float>(line.strengths[i]);
+void set_sources(const double* data, int count) {
+    std::vector<Source> sources;
+    sources.reserve(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        const double* p = data + static_cast<std::ptrdiff_t>(i) * kSourceStride;
+        Source s;
+        s.kind = static_cast<int>(p[0]);
+        s.pos = Vec3{p[1], p[2], p[3]};
+        s.dir = Vec3{p[4], p[5], p[6]};
+        s.vel = Vec3{p[7], p[8], p[9]};
+        s.p0 = p[10];
+        s.p1 = p[11];
+        sources.push_back(s);
     }
-    return buffer;
+    setSources(sources);
 }
 
-// 对外导出：释放 Wasm 内存
+// 批量追踪场线。
+//   field      0=E, 1=B
+//   seeds      平铺 double，每个种子 4 个：[x, y, z, sign]
+//   stopRadius 贴到源该距离内即收线
+// 返回指向内部缓冲的指针，内容为 [count, (x,y,z,|F|) x count] 顺序拼接。
+// 注意：调用后若内存增长，JS 侧需重新获取 HEAPF32 视图。
 extern "C" EMSCRIPTEN_KEEPALIVE
-void freeFieldLine(float* ptr) {
-    std::free(ptr);
+const float* trace_lines(int field, const double* seeds, int seedCount, double step, int maxSteps,
+                         double maxRadius, double stopRadius) {
+    g_out.clear();
+    g_out.reserve(static_cast<std::size_t>(seedCount) * 4096);
+
+    for (int i = 0; i < seedCount; ++i) {
+        const double* s = seeds + static_cast<std::ptrdiff_t>(i) * 4;
+        const int sign = s[3] < 0.0 ? -1 : 1;
+        traceInto(field, sign, Vec3{s[0], s[1], s[2]}, step, maxSteps, maxRadius, stopRadius, g_out);
+    }
+    return g_out.data();
+}
+
+// 单点求场：out6 = [Ex, Ey, Ez, Bx, By, Bz]
+extern "C" EMSCRIPTEN_KEEPALIVE
+void eval_field(double x, double y, double z, double* out6) {
+    const Vec3 pos{x, y, z};
+    const Vec3 e = evalE(pos);
+    const Vec3 b = evalB(pos);
+    out6[0] = e.x;
+    out6[1] = e.y;
+    out6[2] = e.z;
+    out6[3] = b.x;
+    out6[4] = b.y;
+    out6[5] = b.z;
 }

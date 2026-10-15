@@ -386,68 +386,239 @@
 }
 /* 图上标注已改为 HTML 层（.model__tex，由 KaTeX 渲染），不再有 SVG text */
 
-/* ===================== 模拟页 ===================== */
+/* ===================== 模拟页外壳 ===================== */
 @layer components {
   body.is-sim {
     overflow: hidden;
   }
 
-  .info-panel {
+  #viewport {
     position: fixed;
-    top: 1.25rem;
-    left: 1.25rem;
-    z-index: 10;
-    max-width: 280px;
-    padding: 1rem 1.25rem;
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-card);
-    background: color-mix(in oklab, var(--color-surface) 82%, transparent);
-    backdrop-filter: blur(6px);
-    font-size: 0.875rem;
-    line-height: 1.6;
-    pointer-events: none;
+    inset: 0;
+    z-index: 0;
   }
-  .info-panel h3 {
-    margin: 0 0 0.6rem;
-    font-size: 1rem;
+  #viewport canvas {
+    display: block;
+  }
+
+  /* 顶栏：保持很窄一条 */
+  .sim-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    background: color-mix(in oklab, var(--color-bg) 78%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .sim-topbar__title {
     font-weight: 600;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .sim-topbar__spacer {
+    flex: 1;
+  }
+
+  .seg {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+  }
+  .seg__btn {
+    padding: 0.35rem 0.85rem;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .seg__btn:hover {
     color: var(--color-fg);
   }
-  .info-panel .desc {
-    margin-bottom: 0.75rem;
-    color: var(--color-muted);
+  .seg__btn.is-active {
+    background: color-mix(in oklab, var(--color-primary) 32%, transparent);
+    color: var(--color-fg);
   }
-  .info-panel .legend-title {
-    color: var(--color-muted);
-  }
-  .legend-bar {
-    width: 100%;
-    height: 8px;
-    margin: 0.35rem 0 0.25rem;
-    border-radius: var(--radius-pill);
-    background: linear-gradient(to right, #0066ff, #00ffff, #ffff00, #ff3300);
-  }
-  .legend-label {
+
+  .legend {
     display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
+    gap: 1rem;
+  }
+  .legend__row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
     color: var(--color-muted);
   }
-  .info-panel .tips {
-    margin-top: 0.75rem;
-    padding-top: 0.6rem;
+  .legend__row em {
+    font-style: normal;
+  }
+  .legend__bar {
+    width: 64px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+  }
+  /* 与 src/render/colors.ts 的 RAMPS 保持一致 */
+  .legend__bar--e {
+    background: linear-gradient(to right, hsl(32 95% 34%), hsl(56 95% 72%));
+  }
+  .legend__bar--b {
+    background: linear-gradient(to right, hsl(222 90% 30%), hsl(188 90% 70%));
+  }
+
+  .btn--sm {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  /* 左侧折叠抽屉 */
+  .drawer {
+    position: fixed;
+    top: 3.6rem;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-start;
+    max-height: calc(100vh - 4.6rem);
+  }
+  .drawer__toggle {
+    writing-mode: vertical-rl;
+    padding: 0.9rem 0.5rem;
+    border: 1px solid var(--color-line);
+    border-left: none;
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+    backdrop-filter: blur(10px);
+    color: var(--color-fg);
+    font: inherit;
+    font-size: 0.82rem;
+    letter-spacing: 0.25em;
+    cursor: pointer;
+  }
+  .drawer__body {
+    display: none;
+    width: 17rem;
+    max-height: calc(100vh - 4.6rem);
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--color-line);
+    border-left: none;
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .drawer.is-open .drawer__body {
+    display: block;
+    animation: drawer-in 0.18s ease-out;
+  }
+  .drawer__section + .drawer__section {
+    margin-top: 1.1rem;
+    padding-top: 1rem;
     border-top: 1px solid var(--color-line);
-    font-size: 0.75rem;
+  }
+  .drawer__title {
+    margin: 0 0 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     color: var(--color-muted);
   }
-  .back-link {
-    display: inline-block;
-    margin-top: 0.75rem;
-    color: var(--color-accent);
-    text-decoration: none;
-    pointer-events: auto;
+
+  .palette {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
   }
-  .back-link:hover {
-    text-decoration: underline;
+  .palette__item {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.6rem;
+    background: color-mix(in oklab, var(--color-surface-2) 80%, transparent);
+    color: var(--color-fg);
+    font: inherit;
+    font-size: 0.88rem;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .palette__item:hover {
+    border-color: var(--color-primary-soft);
+    background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  }
+
+  .props__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+  .props__title {
+    font-size: 0.9rem;
+  }
+  .props__delete {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid color-mix(in oklab, var(--color-danger) 55%, transparent);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-danger);
+    font: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .props__row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.8rem;
+  }
+  .props__name {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+  .props__row input[type='range'] {
+    width: 100%;
+    accent-color: var(--color-primary-soft);
+  }
+  .props__value {
+    font-size: 0.78rem;
+    color: var(--color-accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sim-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 0.9rem;
+    transform: translateX(-50%);
+    z-index: 15;
+    max-width: min(90vw, 660px);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
