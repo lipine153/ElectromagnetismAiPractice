@@ -69,5 +69,6 @@ Testing/
 # Node / Vite
 node_modules/
 dist/
+dist-offline/
 .vite/
 *.local

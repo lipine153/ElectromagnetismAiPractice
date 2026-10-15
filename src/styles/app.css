@@ -472,10 +472,10 @@
   }
   /* 与 src/render/colors.ts 的 RAMPS 保持一致 */
   .legend__bar--e {
-    background: linear-gradient(to right, hsl(32 95% 34%), hsl(56 95% 72%));
+    background: linear-gradient(to right, hsl(12 95% 18%), hsl(56 95% 90%));
   }
   .legend__bar--b {
-    background: linear-gradient(to right, hsl(222 90% 30%), hsl(188 90% 70%));
+    background: linear-gradient(to right, hsl(232 90% 16%), hsl(190 90% 85%));
   }
 
   .btn--sm {

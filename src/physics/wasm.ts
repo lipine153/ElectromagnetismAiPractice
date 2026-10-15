@@ -41,6 +41,14 @@ function packParams(el: SceneElement): [number, number] {
   }
 }
 
+/** base64 -> 字节；离线单文件构建时用来把内嵌的 wasm 交给胶水 */
+function decodeBase64(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 /** 对 cpp/ 里那份场引擎的封装。所有跨界调用都在这里。 */
 export class FieldEngine {
   private readonly module: FieldLineModuleInstance;
@@ -56,7 +64,10 @@ export class FieldEngine {
   }
 
   static async load(): Promise<FieldEngine> {
-    return new FieldEngine(await FieldLineModule());
+    // 离线单文件构建会注入 window.__FIELD_LINE_WASM__，直接喂给胶水即可免去 fetch
+    const inlineWasm = typeof window !== 'undefined' ? window.__FIELD_LINE_WASM__ : undefined;
+    const module = await FieldLineModule(inlineWasm ? { wasmBinary: decodeBase64(inlineWasm) } : undefined);
+    return new FieldEngine(module);
   }
 
   /** 用当前要素整体替换场源列表 */

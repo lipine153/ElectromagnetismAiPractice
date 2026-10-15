@@ -1,9 +1,20 @@
+import { renderTex } from '../math';
 import { PALETTE, PARAM_SPECS, elementLabel } from '../scene/catalog';
 import { nextId, type SceneStore } from '../scene/store';
 import { vec3, type SceneElement } from '../scene/types';
 
-const formatValue = (value: number): string =>
-  value !== 0 && Math.abs(value) < 1e-3 ? value.toExponential(1) : value.toFixed(2);
+/** 把数值写成 LaTeX：小量用科学计数法，例如 1.00×10⁻⁹ C */
+function texValue(value: number, unit?: string): string {
+  const suffix = unit ? `\\ \\text{${unit}}` : '';
+  if (value === 0) return `0${suffix}`;
+
+  const abs = Math.abs(value);
+  if (abs >= 1e-3 && abs < 1e4) return `${value.toFixed(2)}${suffix}`;
+
+  const exponent = Math.floor(Math.log10(abs));
+  const mantissa = value / 10 ** exponent;
+  return `${mantissa.toFixed(2)}\\times 10^{${exponent}}${suffix}`;
+}
 
 /** 左侧折叠抽屉：要素库 + 选中要素的属性 */
 export function mountPanel(store: SceneStore, root: ParentNode = document): void {
@@ -74,7 +85,8 @@ export function mountPanel(store: SceneStore, root: ParentNode = document): void
 
       const name = document.createElement('span');
       name.className = 'props__name';
-      name.textContent = spec.unit ? `${spec.label} (${spec.unit})` : spec.label;
+      // 单位交给右侧的 LaTeX 数值，标签里不再重复
+      name.textContent = spec.label;
 
       const input = document.createElement('input');
       input.type = 'range';
@@ -85,14 +97,14 @@ export function mountPanel(store: SceneStore, root: ParentNode = document): void
 
       const out = document.createElement('span');
       out.className = 'props__value';
-      out.textContent = formatValue(element.params[spec.key] ?? 0);
+      renderTex(out, texValue(element.params[spec.key] ?? 0, spec.unit));
 
       input.addEventListener('input', () => {
         const value = Number(input.value);
         const current = store.snapshot.elements.find((e) => e.id === element.id)?.params ?? {};
         const params = { ...current, [spec.key]: value };
         store.updateElement(element.id, { params });
-        out.textContent = formatValue(value);
+        renderTex(out, texValue(value, spec.unit));
         if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
       });
 

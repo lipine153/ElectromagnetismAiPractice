@@ -19,24 +19,22 @@ function fibonacciSphere(n: number, radius: number): Array<[number, number, numb
 /**
  * 生成追踪用的种子点，stride 4 = [x, y, z, sign]。
  *
- * 策略：优先从正电荷向外「顺场」追；若场景里没有正电荷，则从负电荷「逆场」追，
- * 画出来的效果同样是向外的场线，且避免同一条线被画两遍。
+ * 对**每一个**电荷都在其周围撒种子，并沿各自极性向外追（正电荷顺场、负电荷逆场）。
+ * 早先只在正电荷撒种子，导致负电荷一侧只有线汇入、没有线发出，正负两端看起来不对称；
+ * 现在两端都有对称的场线扇面。
  */
 export function buildSeeds(elements: readonly SceneElement[]): Float64Array {
-  const charges = elements.filter((e) => e.kind === 'charge');
-  const positives = charges.filter((e) => (e.params.q ?? 0) >= 0);
-  const anchors = positives.length > 0 ? positives : charges;
-  const sign = positives.length > 0 ? 1 : -1;
+  const charges = elements.filter((e) => e.kind === 'charge' && (e.params.q ?? 0) !== 0);
+  if (charges.length === 0) return new Float64Array(0);
 
-  if (anchors.length === 0) return new Float64Array(0);
-
-  const out = new Float64Array(anchors.length * SEEDS_PER_CHARGE * 4);
+  const out = new Float64Array(charges.length * SEEDS_PER_CHARGE * 4);
   let k = 0;
-  for (const anchor of anchors) {
+  for (const charge of charges) {
+    const sign = (charge.params.q ?? 0) >= 0 ? 1 : -1;
     for (const [dx, dy, dz] of fibonacciSphere(SEEDS_PER_CHARGE, SEED_RADIUS)) {
-      out[k] = anchor.position.x + dx;
-      out[k + 1] = anchor.position.y + dy;
-      out[k + 2] = anchor.position.z + dz;
+      out[k] = charge.position.x + dx;
+      out[k + 1] = charge.position.y + dy;
+      out[k + 2] = charge.position.z + dz;
       out[k + 3] = sign;
       k += 4;
     }

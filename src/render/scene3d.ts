@@ -36,10 +36,9 @@ export function createScene3D(container: HTMLElement): Scene3D {
   key.position.set(5, 8, 6);
   scene.add(key);
 
-  // 参考网格与坐标轴（中性色，不抢戏）
+  // 参考网格（中性色，不抢戏）。不显示 XYZ 坐标轴。
   const grid = new THREE.GridHelper(10, 10, 0x2c3242, 0x1b2130);
   scene.add(grid);
-  scene.add(new THREE.AxesHelper(1.2));
 
   const frameCbs: Array<() => void> = [];
   const resizeCbs: Array<() => void> = [];

@@ -11,6 +11,7 @@ bun run dev          # Vite dev server (http://localhost:5173)
 bun run build        # tsc --noEmit && vite build -> dist/
 bun run preview      # preview dist/
 bun run typecheck    # tsc --noEmit only
+bun run build:offline  # 单文件离线版 -> dist-offline/（双击即用，可直接发给别人）
 pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
 ```
 - **bun is not on PATH by default** — run `pineload bun` first (`pineload` =
@@ -44,9 +45,18 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
 
 ## Sandbox architecture (phase 0: electrostatics only)
 `SceneStore.elements[]` → packed into doubles → `_set_sources` → C++ sums E/B at any point →
-`seeds.ts` generates seed points → `_trace_lines` → three.js `Line2` groups (one for E, one
-for B). Field lines are retraced at ~15fps while the scene changes, never per frame at 60fps.
-Phases still to come: magnetostatics, induction, displacement current.
+`seeds.ts` generates seed points → `_trace_lines` → three.js `Line2` groups. Field lines are
+retraced at ~15fps while the scene changes, never per frame at 60fps. Phases still to come:
+magnetostatics, induction, displacement current.
+
+Two things about field lines that were got wrong once already:
+- **Seeding**: every charge gets seed points and is traced *outward* by its own sign (positive
+  forward, negative reverse). Seeding only positive charges made the two ends look asymmetric.
+- **Strength encoding**: one **global** log colour scale per field, spanning an adaptive 2–4
+  decades of the scene's actual `|F|` range — never per-line normalisation, which makes every
+  line span the whole ramp and hides the differences. On top of the colour, `fieldLines.ts`
+  splits each polyline into 3 strength buckets drawn with different width/opacity
+  (`BUCKETS`), which is what actually makes strong vs weak obvious at a glance.
 
 ## C++ ↔ JS contract (keep both sides in sync)
 - **Source encoding**: flat `double[]`, `kSourceStride = 12` per source:
@@ -65,6 +75,25 @@ Phases still to come: magnetostatics, induction, displacement current.
   the wasm through `locateFile` relative to its own URL, so both must be committed and served
   together. Streaming compile needs `Content-Type: application/wasm` (Vite dev/preview send
   it); plain static servers may fall back to ArrayBuffer instantiation, which still works.
+
+## Offline single-file build
+`bun run build:offline` (`scripts/build-offline.mjs`) produces `dist-offline/index.html` +
+`dist-offline/quiz.html`, each **fully self-contained** (JS/CSS/woff2/wasm inlined) so they run
+by double-click over `file://` with nothing installed — that is the "send it to someone" build.
+Hard-won details if you touch that script:
+- Fonts: only **woff2** is inlined; the woff/ttf sources are stripped (saves ~1 MB per page).
+- The wasm is handed to the glue as `{ wasmBinary }` via `window.__FIELD_LINE_WASM__`, so
+  nothing is fetched. `src/physics/wasm.ts` picks that global up when present.
+- The entry script is built as an IIFE and **moved to just before `</body>`**. Vite puts it in
+  `<head>` (a deferred module), but an inlined *classic* script in `<head>` runs before `<body>`
+  exists, so `getElementById` returns null and the page dies instantly.
+- **Use callback replacements** in `String.replace` when splicing content in. Minified JS/CSS
+  contains `$&` / `$'` / `` $` ``, and the string form expands those — it silently duplicated
+  the whole document into itself.
+- Close any browser holding `dist-offline/` before rebuilding: Windows file locks make
+  `rmSync` fail silently and the next build stacks on top of the old output.
+- Page sizes: `index.html` ~1.25 MB (the sandbox properties panel renders values as LaTeX via
+  KaTeX, so the sandbox page carries KaTeX + its woff2 fonts), `quiz.html` ~0.65 MB.
 
 ## Verifying the Wasm from Node
 `package.json` has `"type": "module"`, so Node treats the CJS-style glue as ESM and

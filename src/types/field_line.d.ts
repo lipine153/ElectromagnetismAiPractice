@@ -2,6 +2,11 @@
  * public/bin/field_line.js（Emscripten 产物）暴露的全局工厂。
  * 该文件以经典 <script> 载入，不属于模块，故在此做全局声明。
  */
+interface FieldLineModuleArg {
+  /** 直接提供 wasm 二进制，可跳过对 .wasm 的 fetch（离线单文件构建用） */
+  wasmBinary?: Uint8Array | ArrayBuffer;
+}
+
 interface FieldLineModuleInstance {
   readonly HEAPF32: Float32Array;
   readonly HEAPF64: Float64Array;
@@ -24,4 +29,9 @@ interface FieldLineModuleInstance {
   getValue(ptr: number, type: string): number;
 }
 
-declare function FieldLineModule(): Promise<FieldLineModuleInstance>;
+declare function FieldLineModule(moduleArg?: FieldLineModuleArg): Promise<FieldLineModuleInstance>;
+
+/** 离线单文件构建时由构建脚本注入（base64 的 wasm），有它就不再请求 .wasm */
+interface Window {
+  __FIELD_LINE_WASM__?: string;
+}
