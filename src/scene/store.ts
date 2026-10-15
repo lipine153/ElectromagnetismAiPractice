@@ -1,4 +1,4 @@
-import type { FieldMode, SceneElement } from './types';
+import type { FieldMode, SceneElement, WireTool } from './types';
 
 export interface SceneState {
   elements: SceneElement[];
@@ -8,6 +8,8 @@ export interface SceneState {
   showArrows: boolean;
   /** 场线密度档位（对应 physics/seeds.ts 的 DENSITY_LEVELS） */
   lineDensity: number;
+  /** 选中导线时 gizmo 的用途（整体平移 / 旋转圆环平面） */
+  wireTool: WireTool;
   /** 是否正在拖拽某个要素 */
   dragging: boolean;
 }
@@ -22,6 +24,7 @@ export class SceneStore {
     fieldMode: 'E',
     showArrows: true,
     lineDensity: 1,
+    wireTool: 'move',
     dragging: false,
   };
   private listeners = new Set<Listener>();
@@ -78,6 +81,10 @@ export class SceneStore {
 
   setLineDensity(level: number): void {
     this.patch({ lineDensity: level });
+  }
+
+  setWireTool(tool: WireTool): void {
+    this.patch({ wireTool: tool });
   }
 
   setDragging(dragging: boolean): void {

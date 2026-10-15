@@ -13,6 +13,14 @@ import { mountPanel } from './ui/panel';
 import { mountToolbar } from './ui/toolbar';
 
 const TRACE: TraceOptions = { step: 0.05, maxSteps: 4000, maxRadius: 10, stopRadius: 0.06 };
+
+/**
+ * 磁场线单独的配置：**弧长上限短得多**。
+ * 多根导体叠加后的磁场一般不闭合（场线会绕着多根线无限缠绕），
+ * 若不设限，每条线都会跑满步数上限，几十条线堆在一起就是一团实心，
+ * 完全看不出结构。这里截断到约 15 个单位的弧长。
+ */
+const TRACE_B: TraceOptions = { ...TRACE, maxSteps: 300 };
 /** 场线重算节流：拖动时约 15fps，不追 60fps */
 const TRACE_INTERVAL_MS = 1000 / 15;
 
@@ -62,11 +70,11 @@ function retrace(): void {
   fieldLines.update('E', wantE && eSeeds.length > 0 ? engine.trace('E', eSeeds, TRACE) : null);
 
   const bSeeds = buildWireSeeds(state.elements, state.lineDensity);
-  fieldLines.update('B', wantB && hasMagneticSource(state.elements) ? engine.trace('B', bSeeds, TRACE) : null);
+  fieldLines.update('B', wantB && hasMagneticSource(state.elements) ? engine.trace('B', bSeeds, TRACE_B) : null);
 }
 
 store.subscribe((state) => {
-  elementViews.sync(state.elements, state.selectedId, state.dragging, scene3d.size());
+  elementViews.sync(state.elements, state.selectedId, state.dragging, scene3d.size(), state.wireTool);
   fieldLines.setArrowsVisible(state.showArrows);
   retraceDirty = true;
 });

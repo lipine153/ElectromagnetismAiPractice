@@ -1,6 +1,7 @@
+import { isTwoNodeCircle } from '../scene/geometry';
 import { DENSITY_LABELS, DENSITY_LEVELS } from '../physics/seeds';
 import type { SceneStore } from '../scene/store';
-import type { FieldMode } from '../scene/types';
+import type { FieldMode, WireTool } from '../scene/types';
 
 /** 顶栏：E / B / 同时 三态切换 + 重置场景 */
 export function mountToolbar(store: SceneStore, root: ParentNode = document): void {
@@ -18,6 +19,18 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
   arrowBtn?.addEventListener('click', () => {
     store.setShowArrows(!store.snapshot.showArrows);
   });
+
+  // ---------- 导线工具（选中圆环时才出现）----------
+  const toolBox = root.querySelector<HTMLElement>('#wire-tool');
+  const toolButtons = toolBox
+    ? Array.from(toolBox.querySelectorAll<HTMLButtonElement>('[data-tool]'))
+    : [];
+  for (const btn of toolButtons) {
+    btn.addEventListener('click', () => {
+      const tool = btn.dataset.tool as WireTool | undefined;
+      if (tool) store.setWireTool(tool);
+    });
+  }
 
   // ---------- 线密度（非连续滑块）----------
   const density = root.querySelector<HTMLInputElement>('#line-density');
@@ -43,6 +56,10 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
     }
     if (density) density.value = String(state.lineDensity);
     if (densityLabel) densityLabel.textContent = DENSITY_LABELS[state.lineDensity] ?? '—';
+
+    const selected = state.elements.find((e) => e.id === state.selectedId);
+    if (toolBox) toolBox.hidden = !(selected && isTwoNodeCircle(selected));
+    for (const btn of toolButtons) btn.classList.toggle('is-active', btn.dataset.tool === state.wireTool);
     const showE = state.fieldMode !== 'B';
     const showB = state.fieldMode !== 'E';
     if (legend) legend.hidden = !showE && !showB;

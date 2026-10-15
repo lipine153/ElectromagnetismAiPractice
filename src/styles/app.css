@@ -722,6 +722,49 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* 开关型参数：名称 · 值 · 按钮 排成一行 */
+  .param--toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+  }
+  .param--toggle .param__name {
+    flex: 1;
+  }
+  .param__input--toggle {
+    appearance: none;
+    position: relative;
+    flex: none;
+    width: 2.2rem;
+    height: 1.15rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklab, var(--color-surface-2) 90%, transparent);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .param__input--toggle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: var(--color-muted);
+    transform: translateY(-50%);
+    transition: left 0.15s, background-color 0.15s;
+  }
+  .param__input--toggle:checked {
+    border-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+  }
+  .param__input--toggle:checked::after {
+    left: calc(100% - 0.75rem - 2px);
+    background: var(--color-fg);
+  }
+
   .sim-hint {
     position: fixed;
     left: 50%;

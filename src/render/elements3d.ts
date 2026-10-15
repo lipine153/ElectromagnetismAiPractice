@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { elementColor } from '../scene/catalog';
-import { isClosedWire } from '../scene/geometry';
+import { isTwoNodeCircle } from '../scene/geometry';
 import type { SceneStore } from '../scene/store';
-import type { SceneElement, Vec3 } from '../scene/types';
+import type { SceneElement, Vec3, WireTool } from '../scene/types';
 import type { Scene3D } from './scene3d';
 import { WireView } from './wireView';
 
@@ -20,11 +20,6 @@ export interface ElementPick {
 }
 
 type DragKind = 'none' | 'node' | 'translate' | 'rotate' | 'simple';
-
-const isTwoNodeCircle = (element: SceneElement): boolean =>
-  element.kind === 'straightWire' &&
-  isClosedWire(element) &&
-  (element.nodes?.length ?? 0) === 2;
 
 /** 场景里每个要素的 3D 表示 + 选中/拖拽（TransformControls） */
 export class ElementViews {
@@ -284,6 +279,7 @@ export class ElementViews {
     selectedId: string | null,
     dragging: boolean,
     size: { width: number; height: number },
+    wireTool: WireTool,
   ): void {
     const seen = new Set<string>();
 
@@ -326,7 +322,7 @@ export class ElementViews {
       this.wireViews.delete(id);
     }
 
-    this.syncTransform(elements, selectedId);
+    this.syncTransform(elements, selectedId, wireTool);
   }
 
   private detachIfBelongs(view: WireView): void {
@@ -336,7 +332,11 @@ export class ElementViews {
     }
   }
 
-  private syncTransform(elements: readonly SceneElement[], selectedId: string | null): void {
+  private syncTransform(
+    elements: readonly SceneElement[],
+    selectedId: string | null,
+    wireTool: WireTool,
+  ): void {
     const element = selectedId ? elements.find((e) => e.id === selectedId) : undefined;
     if (!element) {
       if (this.transform.object) this.transform.detach();
@@ -352,12 +352,12 @@ export class ElementViews {
       const handle = this.selectedNode !== null ? view.handles[this.selectedNode] : undefined;
       if (handle?.visible) {
         this.attach('node', handle, element.id);
-      } else if (isTwoNodeCircle(element)) {
-        // 圆环：旋转手柄改平面方向；整体平移靠直接拖动导线本体
+      } else if (wireTool === 'rotate' && isTwoNodeCircle(element)) {
+        // 旋转工具：改圆环所在平面（导线本身仍可直接拖动平移）
         this.attach('rotate', view.rotateProxy, element.id);
       } else {
-        // 其它导线不给 gizmo，直接拖动本体即可移动
-        if (this.transform.object) this.transform.detach();
+        // 平移工具：整体移动整条导线（多段导线与圆环都适用）
+        this.attach('translate', view.translateProxy, element.id);
       }
       return;
     }

@@ -95,7 +95,8 @@ Field-line gotchas (each of these was got wrong once already):
 ## Sandbox UI conventions (keep this feel — don't drift)
 The sandbox stays **minimal**: full-screen scene, one slim top bar, one collapsible left
 drawer. No permanent side panels, no wall of buttons ("中药铺"). If a new control affects the
-whole scene it goes in the top bar (field mode, 方向箭头, 线密度); anything per-element stays in
+whole scene it goes in the top bar (field mode, 方向箭头, 线密度, and the 移动/旋转 wire tool
+that only appears while a rotatable loop is selected); anything per-element stays in
 the drawer or the context menu.
 - **Everything is selectable.** Click or right-click an element to select it; the selection
   drives both the drawer's properties section and the `TransformControls` gizmo. A newly added

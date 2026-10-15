@@ -38,3 +38,6 @@ export interface SceneElement {
 }
 
 export type FieldMode = 'E' | 'B' | 'both';
+
+/** 导线选中时 gizmo 干什么用：整体平移 / 改圆环平面方向 */
+export type WireTool = 'move' | 'rotate';

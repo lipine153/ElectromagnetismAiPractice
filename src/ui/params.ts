@@ -27,7 +27,8 @@ export function createParamControl(
   onChange?: (params: Record<string, number>) => void,
 ): HTMLElement {
   const row = document.createElement('label');
-  row.className = 'param';
+  // toggle 用「名称 值 按钮」一行排开，range 仍保持竖排
+  row.className = spec.type === 'toggle' ? 'param param--toggle' : 'param';
 
   const name = document.createElement('span');
   name.className = 'param__name';
@@ -58,6 +59,9 @@ export function createParamControl(
       commit(next);
       value.textContent = next ? '开' : '关';
     });
+    // 一行：名称 · 值 · 开关按钮
+    row.append(name, value, input);
+    return row;
   } else {
     input = document.createElement('input');
     input.type = 'range';

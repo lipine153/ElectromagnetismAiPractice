@@ -1,4 +1,5 @@
 import { PARAM_SPECS, elementDomain, elementLabel } from '../scene/catalog';
+import { isTwoNodeCircle } from '../scene/geometry';
 import { addNodeAfter, insertNodeAt, removeNode } from '../scene/ops';
 import type { SceneStore } from '../scene/store';
 import type { Vec3 } from '../scene/types';
@@ -59,6 +60,18 @@ export function buildMenuContent(
   }
 
   if (element.kind === 'straightWire') {
+    // 圆环：可在「整体平移 / 旋转平面」之间切换（TransformControls 一次只挂一个 gizmo）
+    if (isTwoNodeCircle(element)) {
+      const toRotate = store.snapshot.wireTool === 'move';
+      items.push(
+        makeButton(
+          toRotate ? '切换为旋转工具' : '切换为平移工具',
+          false,
+          () => store.setWireTool(toRotate ? 'rotate' : 'move'),
+          close,
+        ),
+      );
+    }
     items.push(
       makeButton(
         '添加节点（末端）',

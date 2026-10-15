@@ -28,6 +28,13 @@ export const normalize = (p: Vec3): Vec3 => {
   return n > 1e-12 ? scale(p, 1 / n) : { x: 0, y: 0, z: 0 };
 };
 
+/** 两节点闭合 = 圆环（可旋转平面） */
+export function isTwoNodeCircle(element: SceneElement): boolean {
+  return (
+    element.kind === 'straightWire' && isClosedWire(element) && (element.nodes?.length ?? 0) === 2
+  );
+}
+
 export function isClosedWire(element: SceneElement): boolean {
   return (element.params.closed ?? 0) > 0.5;
 }
@@ -96,14 +103,21 @@ export function wireSegments(element: SceneElement): WireSegment[] {
     if (len > 1e-9) out.push({ a: nodes[nodes.length - 1], dir: scale(d, 1 / len), len });
   } else {
     // 开放导线：两头沿相邻节点连线延伸到无穷远（电流从无穷远流入、流向无穷远）
-    const head = sub(nodes[0], nodes[1]);
-    if (norm(head) > 1e-9) {
-      out.unshift({ a: nodes[0], dir: normalize(head), len: INFINITE_LENGTH });
+    const u = normalize(sub(nodes[1], nodes[0]));
+    if (norm(u) > 1e-9) {
+      // 首端延伸：几何要从很远处**指向** node0，这样电流方向才与主段一致。
+      // （早先把 dir 写成向外的 −u，结果接头处两段场互相抵消，实测 |B| ~ 1e-23）
+      out.unshift({
+        a: sub(nodes[0], scale(u, INFINITE_LENGTH)),
+        dir: u,
+        len: INFINITE_LENGTH,
+      });
     }
     const last = nodes.length - 1;
-    const tail = sub(nodes[last], nodes[last - 1]);
-    if (norm(tail) > 1e-9) {
-      out.push({ a: nodes[last], dir: normalize(tail), len: INFINITE_LENGTH });
+    const v = normalize(sub(nodes[last], nodes[last - 1]));
+    if (norm(v) > 1e-9) {
+      // 末端延伸：从 nodeN 继续向外
+      out.push({ a: nodes[last], dir: v, len: INFINITE_LENGTH });
     }
   }
   return out;
