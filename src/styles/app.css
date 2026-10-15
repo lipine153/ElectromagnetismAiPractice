@@ -482,6 +482,12 @@
     padding: 0.35rem 0.8rem;
     font-size: 0.85rem;
   }
+  /* 开关型按钮的「开」状态 */
+  .btn.is-on {
+    border-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+    color: var(--color-fg);
+  }
 
   /* 左侧折叠抽屉 */
   .drawer {

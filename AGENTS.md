@@ -49,7 +49,7 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
 retraced at ~15fps while the scene changes, never per frame at 60fps. Phases still to come:
 magnetostatics, induction, displacement current.
 
-Two things about field lines that were got wrong once already:
+Field-line gotchas (each of these was got wrong once already):
 - **Seeding**: every charge gets seed points and is traced *outward* by its own sign (positive
   forward, negative reverse). Seeding only positive charges made the two ends look asymmetric.
 - **Strength encoding**: one **global** log colour scale per field, spanning an adaptive 2–4
@@ -57,6 +57,13 @@ Two things about field lines that were got wrong once already:
   line span the whole ramp and hides the differences. On top of the colour, `fieldLines.ts`
   splits each polyline into 3 strength buckets drawn with different width/opacity
   (`BUCKETS`), which is what actually makes strong vs weak obvious at a glance.
+- **Direction arrows**: one `InstancedMesh` of small cones per field, placed every
+  `ARROW_SPACING` world units along each polyline and coloured by the same ramp. This depends
+  on C++ emitting every polyline **in field direction** — `integrator.cpp` reverses the point
+  order for reverse-traced (negative-charge) lines. Do **not** set `vertexColors` on the arrow
+  material: `instanceColor` enables `USE_INSTANCING_COLOR` by itself, whereas `vertexColors`
+  would require a `color` attribute that `ConeGeometry` does not have. The top-bar toggle just
+  flips `SceneStore.showArrows` → `FieldLines.setArrowsVisible()` (no retrace needed).
 
 ## C++ ↔ JS contract (keep both sides in sync)
 - **Source encoding**: flat `double[]`, `kSourceStride = 12` per source:

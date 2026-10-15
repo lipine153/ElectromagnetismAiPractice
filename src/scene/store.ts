@@ -4,6 +4,8 @@ export interface SceneState {
   elements: SceneElement[];
   selectedId: string | null;
   fieldMode: FieldMode;
+  /** 是否显示场线方向箭头 */
+  showArrows: boolean;
   /** 是否正在拖拽某个要素 */
   dragging: boolean;
 }
@@ -22,6 +24,7 @@ export class SceneStore {
     elements: [],
     selectedId: null,
     fieldMode: 'E',
+    showArrows: true,
     dragging: false,
   };
   private listeners = new Set<Listener>();
@@ -70,6 +73,10 @@ export class SceneStore {
 
   setFieldMode(mode: FieldMode): void {
     this.patch({ fieldMode: mode });
+  }
+
+  setShowArrows(show: boolean): void {
+    this.patch({ showArrows: show });
   }
 
   setDragging(dragging: boolean): void {

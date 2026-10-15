@@ -58,6 +58,7 @@ function retrace(): void {
 
 store.subscribe((state) => {
   elementViews.sync(state.elements, state.selectedId, state.dragging);
+  fieldLines.setArrowsVisible(state.showArrows);
   retraceDirty = true;
 });
 

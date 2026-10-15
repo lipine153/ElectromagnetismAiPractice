@@ -12,6 +12,12 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
     });
   }
 
+  // ---------- 方向箭头 ----------
+  const arrowBtn = root.querySelector<HTMLButtonElement>('#toggle-arrows');
+  arrowBtn?.addEventListener('click', () => {
+    store.setShowArrows(!store.snapshot.showArrows);
+  });
+
   const legend = root.querySelector<HTMLElement>('#sim-legend');
   const eLegend = root.querySelector<HTMLElement>('#legend-e');
   const bLegend = root.querySelector<HTMLElement>('#legend-b');
@@ -19,6 +25,10 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
   store.subscribe((state) => {
     for (const btn of buttons) {
       btn.classList.toggle('is-active', btn.dataset.field === state.fieldMode);
+    }
+    if (arrowBtn) {
+      arrowBtn.classList.toggle('is-on', state.showArrows);
+      arrowBtn.setAttribute('aria-pressed', String(state.showArrows));
     }
     const showE = state.fieldMode !== 'B';
     const showB = state.fieldMode !== 'E';

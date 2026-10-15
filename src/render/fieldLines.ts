@@ -29,10 +29,28 @@ function bucketOf(t: number): number {
   return 0;
 }
 
-/** E / B 两组场线。每组按强度分档共享材质，resolution 只更新几次。 */
+/** 方向箭头：沿线按弧长均匀放置，用 InstancedMesh 一次画完（间距别太小，否则太密） */
+const ARROW_SPACING = 1.8;
+const ARROW_RADIUS = 0.05;
+const ARROW_HEIGHT = 0.14;
+const MAX_ARROWS = 2000;
+
+// ConeGeometry 默认沿 +Y（尖端朝 +Y），把 +Y 旋到切线方向即可
+const ARROW_UP = new THREE.Vector3(0, 1, 0);
+
+/** E / B 两组场线 + 方向箭头。每组按强度分档共享材质，resolution 只更新几次。 */
 export class FieldLines {
   private readonly groups: Record<Field, THREE.Group>;
   private readonly materials: Record<Field, LineMaterial[]>;
+  private readonly arrows: Record<Field, THREE.InstancedMesh>;
+  private arrowsVisible = true;
+
+  private readonly matrix = new THREE.Matrix4();
+  private readonly quaternion = new THREE.Quaternion();
+  private readonly position = new THREE.Vector3();
+  private readonly direction = new THREE.Vector3();
+  private readonly scale = new THREE.Vector3(1, 1, 1);
+  private readonly color = new THREE.Color();
 
   constructor(scene: THREE.Scene, size: { width: number; height: number }) {
     const makeMaterials = (): LineMaterial[] =>
@@ -53,11 +71,35 @@ export class FieldLines {
     this.groups.E.name = 'field-lines-E';
     this.groups.B.name = 'field-lines-B';
     scene.add(this.groups.E, this.groups.B);
+
+    // 箭头单独挂在 scene 上：场线 Group 每次更新会 dispose 子对象几何，
+    // 放进去会把共享的圆锥几何一起销毁。逐实例颜色靠 instanceColor 自动启用，
+    // 注意**不要**设 vertexColors（那会要求几何体带 color 属性）。
+    const arrowGeometry = new THREE.ConeGeometry(ARROW_RADIUS, ARROW_HEIGHT, 8);
+    const arrowMaterial = new THREE.MeshBasicMaterial();
+    const makeArrows = (): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(arrowGeometry, arrowMaterial, MAX_ARROWS);
+      mesh.count = 0;
+      mesh.visible = false;
+      mesh.frustumCulled = false; // 实例包围球不随更新重算，避免被误剔除
+      return mesh;
+    };
+    this.arrows = { E: makeArrows(), B: makeArrows() };
+    scene.add(this.arrows.E, this.arrows.B);
   }
 
   setResolution(width: number, height: number): void {
     for (const field of ['E', 'B'] as const) {
       for (const material of this.materials[field]) material.resolution.set(width, height);
+    }
+  }
+
+  /** 顶栏开关：只切换箭头显隐，不触发重算 */
+  setArrowsVisible(visible: boolean): void {
+    this.arrowsVisible = visible;
+    for (const field of ['E', 'B'] as const) {
+      const mesh = this.arrows[field];
+      mesh.visible = visible && mesh.count > 0;
     }
   }
 
@@ -67,6 +109,10 @@ export class FieldLines {
       (child as Line2).geometry.dispose();
     }
     group.clear();
+
+    const arrowMesh = this.arrows[field];
+    arrowMesh.count = 0;
+    arrowMesh.visible = false;
     if (!traced) return;
 
     const { data, lines } = traced;
@@ -131,5 +177,46 @@ export class FieldLines {
       }
       emit(line, start, line.count - 1, bucket);
     }
+
+    // 方向箭头：折线方向恒为场方向（C++ 侧已把逆场追踪的点序翻转），
+    // 所以直接用相邻两点的方向即可，颜色沿用同一套强度色阶。
+    let arrowCount = 0;
+    for (const line of lines) {
+      if (line.count < 2) continue;
+      let travelled = 0;
+      for (let i = 1; i < line.count; i += 1) {
+        if (arrowCount >= MAX_ARROWS) break;
+
+        const a = line.offset + (i - 1) * 4;
+        const b = line.offset + i * 4;
+        const dx = data[b] - data[a];
+        const dy = data[b + 1] - data[a + 1];
+        const dz = data[b + 2] - data[a + 2];
+        const segment = Math.hypot(dx, dy, dz);
+        if (!(segment > 1e-9)) continue;
+
+        travelled += segment;
+        if (travelled < ARROW_SPACING) continue;
+        travelled = 0;
+
+        this.direction.set(dx / segment, dy / segment, dz / segment);
+        this.position.set(data[b], data[b + 1], data[b + 2]);
+        this.quaternion.setFromUnitVectors(ARROW_UP, this.direction);
+        this.matrix.compose(this.position, this.quaternion, this.scale);
+        arrowMesh.setMatrixAt(arrowCount, this.matrix);
+
+        const [r, g, bl] = rampColor(field, strengthAt(b));
+        this.color.setRGB(r, g, bl);
+        arrowMesh.setColorAt(arrowCount, this.color);
+
+        arrowCount += 1;
+      }
+      if (arrowCount >= MAX_ARROWS) break;
+    }
+
+    arrowMesh.count = arrowCount;
+    arrowMesh.visible = this.arrowsVisible && arrowCount > 0;
+    arrowMesh.instanceMatrix.needsUpdate = true;
+    if (arrowMesh.instanceColor) arrowMesh.instanceColor.needsUpdate = true;
   }
 }

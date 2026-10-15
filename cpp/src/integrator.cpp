@@ -42,5 +42,18 @@ void traceInto(int field, int sign, const Vec3& seed, double step, int maxSteps,
         if (current.norm() > maxRadius) break;  // 跑出计算区域，停
     }
 
+    // 逆场追踪时点的顺序与场方向相反；翻转成顺场，
+    // 这样折线方向恒等于场方向，前端可以据此直接画方向箭头。
+    if (sign < 0) {
+        float* base = out.data() + countSlot + 1;
+        for (int i = 0, j = count - 1; i < j; ++i, --j) {
+            for (int k = 0; k < 4; ++k) {
+                const float tmp = base[i * 4 + k];
+                base[i * 4 + k] = base[j * 4 + k];
+                base[j * 4 + k] = tmp;
+            }
+        }
+    }
+
     out[countSlot] = static_cast<float>(count);
 }
