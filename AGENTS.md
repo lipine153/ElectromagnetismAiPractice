@@ -71,6 +71,26 @@ Field-line gotchas (each of these was got wrong once already):
   would require a `color` attribute that `ConeGeometry` does not have. The top-bar toggle just
   flips `SceneStore.showArrows` → `FieldLines.setArrowsVisible()` (no retrace needed).
 
+## Sandbox UI conventions (keep this feel — don't drift)
+The sandbox stays **minimal**: full-screen scene, one slim top bar, one collapsible left
+drawer. No permanent side panels, no wall of buttons ("中药铺"). If a new control affects the
+whole scene it goes in the top bar (field mode, 方向箭头, 线密度); anything per-element stays in
+the drawer or the context menu.
+- **Everything is selectable.** Click or right-click an element to select it; the selection
+  drives both the drawer's properties section and the `TransformControls` gizmo. A newly added
+  element is selected automatically.
+- **Right-click is the main editing surface** (`src/ui/contextMenu.ts`): on empty ground it
+  offers the palette and spawns the new element *under the cursor*; on an element it offers that
+  element's parameters plus 删除. Any new element kind must work through both paths.
+- **Edit in place.** Parameter sliders live both in the context menu and in the properties panel
+  — always reuse `createParamControl` (`src/ui/params.ts`) rather than hand-rolling a slider, so
+  the value renders as LaTeX and stays in sync with the panel/title.
+- **Numbers are typeset, not printed.** User-facing physical quantities render via KaTeX
+  (`texValue` → `1.00\times10^{-9}\ \text{C}`), never `1.0e-9`.
+- **Adding an element kind** = a `PALETTE` entry + `PARAM_SPECS` in `src/scene/catalog.ts`, a
+  field `case` in `cpp/src/field.cpp`, and a mesh branch in `ElementViews.createMesh`. The
+  drawer and the context menu pick it up automatically — don't special-case them.
+
 ## C++ ↔ JS contract (keep both sides in sync)
 - **Source encoding**: flat `double[]`, `kSourceStride = 12` per source:
   `kind, pos(3), dir(3), vel(3), p0, p1`. Kind codes and what `p0`/`p1` mean live in
