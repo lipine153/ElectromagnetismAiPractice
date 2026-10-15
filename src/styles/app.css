@@ -1,0 +1,453 @@
+@import "tailwindcss";
+
+/* ============================================================
+   设计令牌：全站唯一来源（颜色 / 字体 / 圆角）
+   Tailwind v4 会据此生成 bg-* / text-* / border-* 等工具类
+   ============================================================ */
+@theme {
+  --color-bg: #060913;
+  --color-surface: #0e1424;
+  --color-surface-2: #141c30;
+  --color-line: #27324f;
+  --color-primary: #6366f1;
+  --color-primary-soft: #8b93ff;
+  --color-accent: #22d3ee;
+  --color-success: #34d399;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+  --color-fg: #e6ecf7;
+  --color-muted: #93a0bd;
+
+  --font-sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+
+  --radius-card: 1rem;
+  --radius-pill: 9999px;
+}
+
+/* ===================== 基础 ===================== */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-fg);
+    background:
+      radial-gradient(1100px 720px at 76% -12%, #16264a 0%, transparent 62%),
+      var(--color-bg);
+    min-height: 100vh;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ===================== 组件 ===================== */
+@layer components {
+  .page {
+    position: relative;
+    z-index: 1;
+    width: min(1180px, 100% - 2rem);
+    margin-inline: auto;
+    padding-block: 1.5rem 3rem;
+  }
+
+  /* 背景粒子 */
+  #bg-particles {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* 顶栏 */
+  .brand {
+    font-size: clamp(1.6rem, 1rem + 2vw, 2.6rem);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    line-height: 1.15;
+    background: linear-gradient(92deg, var(--color-fg), var(--color-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* HUD */
+  .hud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .hud__item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+    backdrop-filter: blur(6px);
+  }
+  .hud__label {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+  .hud__value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .hud__value--accent {
+    color: var(--color-accent);
+  }
+  .hud__value--danger {
+    color: var(--color-danger);
+  }
+  .hud__total {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+
+  /* 关卡 / 数值 chip */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .chip {
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklab, var(--color-surface) 80%, transparent);
+    color: var(--color-fg);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: border-color 0.18s, background-color 0.18s, transform 0.18s;
+  }
+  .chip:hover {
+    border-color: var(--color-primary-soft);
+    transform: translateY(-1px);
+  }
+  .chip.is-current {
+    border-color: var(--color-accent);
+    background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+  }
+  .chip.is-selected {
+    border-color: var(--color-primary-soft);
+    background: color-mix(in oklab, var(--color-primary) 28%, transparent);
+    box-shadow: 0 0 0 1px var(--color-primary-soft) inset;
+  }
+
+  /* 面板 */
+  .board {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  @media (min-width: 1024px) {
+    .board {
+      grid-template-columns: 5fr 7fr;
+      align-items: start;
+    }
+  }
+  .panel {
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+    backdrop-filter: blur(8px);
+    padding: 1.25rem 1.35rem;
+  }
+  .panel__title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--color-line);
+    margin-bottom: 0.9rem;
+  }
+  .panel__subtitle {
+    font-size: 0.9rem;
+    color: var(--color-muted);
+    margin: 1.1rem 0 0.6rem;
+  }
+  .panel__actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+  }
+
+  /* 公式文本 */
+  .prose-math {
+    color: var(--color-muted);
+    line-height: 1.75;
+  }
+  .prose-math .katex {
+    color: var(--color-fg);
+  }
+
+  /* 按钮 */
+  .btn {
+    padding: 0.5rem 1.1rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-line);
+    background: color-mix(in oklab, var(--color-surface-2) 90%, transparent);
+    color: var(--color-fg);
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: background-color 0.18s, border-color 0.18s, transform 0.18s;
+  }
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn--go {
+    border-color: color-mix(in oklab, var(--color-success) 60%, transparent);
+    background: color-mix(in oklab, var(--color-success) 22%, transparent);
+  }
+  .btn--warn {
+    border-color: color-mix(in oklab, var(--color-warning) 55%, transparent);
+    background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  }
+
+  /* 答题槽 */
+  .slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.9rem;
+    margin-top: 1.2rem;
+  }
+  .slot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 84px;
+    padding: 0.6rem;
+    border: 1.5px dashed var(--color-line);
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--color-primary) 8%, transparent);
+    cursor: pointer;
+    transition: border-color 0.18s, background-color 0.18s;
+  }
+  .slot__label {
+    font-size: 0.82rem;
+    color: var(--color-muted);
+    text-align: center;
+  }
+  .slot__value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-fg);
+  }
+  .slot.is-target {
+    border-color: var(--color-primary-soft);
+    background: color-mix(in oklab, var(--color-primary) 16%, transparent);
+  }
+  .slot.is-filled {
+    border-style: solid;
+    border-color: var(--color-primary-soft);
+  }
+  .slot.is-correct {
+    border-color: var(--color-success);
+    background: color-mix(in oklab, var(--color-success) 16%, transparent);
+  }
+  .slot.is-wrong {
+    border-color: var(--color-danger);
+    background: color-mix(in oklab, var(--color-danger) 16%, transparent);
+    animation: shake 0.4s;
+  }
+
+  /* 模型 */
+  .model {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    gap: 0.75rem;
+  }
+  .model__stage {
+    position: relative;
+    width: min(360px, 80%);
+  }
+  .model__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .model__tex {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    color: var(--color-muted);
+    font-size: 0.75rem;
+  }
+  .model__caption {
+    color: var(--color-accent);
+    font-size: 0.9rem;
+  }
+
+  /* 弹窗 */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: color-mix(in oklab, #000 82%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .modal__card {
+    width: min(420px, 100%);
+    text-align: center;
+    padding: 2rem;
+    border: 1.5px solid var(--color-primary);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
+  .modal__icon {
+    font-size: 2.6rem;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+  }
+  .modal__icon.is-pass {
+    color: var(--color-success);
+  }
+  .modal__icon.is-fail {
+    color: var(--color-danger);
+  }
+  .modal__title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .modal__desc {
+    color: var(--color-muted);
+    margin-bottom: 1.4rem;
+  }
+  .modal__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+}
+
+/* ===================== 动效 ===================== */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+/* ===================== SVG 模型主题 ===================== */
+.model__svg .m-line {
+  fill: none;
+  stroke: var(--color-primary-soft);
+  stroke-width: 2;
+}
+.model__svg .m-line--soft {
+  stroke: var(--color-line);
+}
+.model__svg .m-line--dielectric {
+  stroke: var(--color-accent);
+  stroke-dasharray: 6 6;
+}
+.model__svg .m-fill {
+  fill: color-mix(in oklab, var(--color-primary) 14%, transparent);
+}
+.model__svg .m-coil {
+  fill: none;
+  stroke: var(--color-success);
+  stroke-width: 3;
+}
+.model__svg .m-coil--alt {
+  stroke: var(--color-warning);
+}
+.model__svg .m-wire {
+  stroke: var(--color-accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.model__svg .m-field {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+/* 图上标注已改为 HTML 层（.model__tex，由 KaTeX 渲染），不再有 SVG text */
+
+/* ===================== 模拟页 ===================== */
+@layer components {
+  body.is-sim {
+    overflow: hidden;
+  }
+
+  .info-panel {
+    position: fixed;
+    top: 1.25rem;
+    left: 1.25rem;
+    z-index: 10;
+    max-width: 280px;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+    backdrop-filter: blur(6px);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    pointer-events: none;
+  }
+  .info-panel h3 {
+    margin: 0 0 0.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+  .info-panel .desc {
+    margin-bottom: 0.75rem;
+    color: var(--color-muted);
+  }
+  .info-panel .legend-title {
+    color: var(--color-muted);
+  }
+  .legend-bar {
+    width: 100%;
+    height: 8px;
+    margin: 0.35rem 0 0.25rem;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(to right, #0066ff, #00ffff, #ffff00, #ff3300);
+  }
+  .legend-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+  .info-panel .tips {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--color-line);
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+  .back-link {
+    display: inline-block;
+    margin-top: 0.75rem;
+    color: var(--color-accent);
+    text-decoration: none;
+    pointer-events: auto;
+  }
+  .back-link:hover {
+    text-decoration: underline;
+  }
+}

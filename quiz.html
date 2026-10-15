@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>电磁学计算大闯关</title>
+</head>
+<body>
+  <canvas id="bg-particles" aria-hidden="true"></canvas>
+
+  <div class="page">
+    <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <h1 class="brand">电磁学计算大闯关</h1>
+      <a class="btn" href="./index.html">← 磁力线模拟</a>
+    </header>
+
+    <section class="hud mb-6" aria-label="游戏状态">
+      <div class="hud__item">
+        <span class="hud__label">关卡</span>
+        <span id="hud-level" class="hud__value">1</span>
+        <span class="hud__total">/ <span id="hud-total">10</span></span>
+      </div>
+      <div class="hud__item">
+        <span class="hud__label">总分</span>
+        <span id="hud-score" class="hud__value hud__value--accent">0</span>
+      </div>
+      <div class="hud__item">
+        <span class="hud__label">剩余</span>
+        <span id="hud-timer" class="hud__value hud__value--danger">120</span>
+        <span class="hud__total">s</span>
+      </div>
+    </section>
+
+    <div id="level-select" class="chips mb-6" aria-label="关卡选择"></div>
+
+    <main class="board">
+      <section class="panel">
+        <h2 class="panel__title">计算题题干</h2>
+        <div id="question" class="prose-math"></div>
+        <h3 class="panel__subtitle">可选结果（点选结果后再点选问题框）</h3>
+        <div id="options" class="chips"></div>
+        <div class="panel__actions">
+          <button id="btn-reset" type="button" class="btn btn--warn">重置作答</button>
+          <button id="btn-submit" type="button" class="btn btn--go">提交计算结果</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div id="model" class="model"></div>
+        <div id="slots" class="slots"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal__card">
+      <div id="modal-icon" class="modal__icon"></div>
+      <h2 id="modal-title" class="modal__title"></h2>
+      <p id="modal-desc" class="modal__desc"></p>
+      <div class="modal__actions">
+        <button id="modal-close" type="button" class="btn">确定</button>
+        <button id="modal-next" type="button" class="btn btn--go" hidden>下一关</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/quiz.ts"></script>
+</body>
+</html>
