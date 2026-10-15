@@ -482,6 +482,24 @@
     padding: 0.35rem 0.8rem;
     font-size: 0.85rem;
   }
+
+  /* 顶栏里的紧凑控件（线密度） */
+  .sim-topbar__control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .sim-topbar__control input[type='range'] {
+    width: 84px;
+    accent-color: var(--color-accent);
+  }
+  .sim-topbar__value {
+    min-width: 1.2em;
+    color: var(--color-fg);
+  }
   /* 开关型按钮的「开」状态 */
   .btn.is-on {
     border-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
@@ -584,21 +602,21 @@
     font-size: 0.78rem;
     cursor: pointer;
   }
-  .props__row {
+  .param {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
     margin-bottom: 0.8rem;
   }
-  .props__name {
+  .param__name {
     font-size: 0.78rem;
     color: var(--color-muted);
   }
-  .props__row input[type='range'] {
+  .param__input {
     width: 100%;
     accent-color: var(--color-primary-soft);
   }
-  .props__value {
+  .param__value {
     font-size: 0.78rem;
     color: var(--color-accent);
     font-variant-numeric: tabular-nums;
@@ -615,6 +633,54 @@
     font-size: 0.75rem;
     color: var(--color-muted);
     pointer-events: none;
+  }
+
+  /* 右键上下文菜单 */
+  .ctx {
+    position: fixed;
+    z-index: 45;
+    min-width: 9rem;
+    padding: 0.3rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.7rem;
+    background: color-mix(in oklab, var(--color-surface) 94%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 30px rgb(0 0 0 / 0.45);
+  }
+  .ctx__title {
+    padding: 0.35rem 0.6rem 0.45rem;
+    margin-bottom: 0.2rem;
+    border-bottom: 1px solid var(--color-line);
+    font-size: 0.72rem;
+    color: var(--color-muted);
+  }
+  .ctx__item {
+    display: block;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: none;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: var(--color-fg);
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .ctx__item:hover {
+    background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+  }
+  .ctx__item--danger {
+    color: var(--color-danger);
+  }
+  .ctx__item--danger:hover {
+    background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+  }
+  /* 参数滑块放进菜单时与菜单项对齐 */
+  .ctx .param {
+    padding: 0.15rem 0.6rem 0;
+    margin-bottom: 0.5rem;
   }
 }
 

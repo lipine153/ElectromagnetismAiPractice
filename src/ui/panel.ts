@@ -1,20 +1,7 @@
-import { renderTex } from '../math';
-import { PALETTE, PARAM_SPECS, elementLabel } from '../scene/catalog';
-import { nextId, type SceneStore } from '../scene/store';
-import { vec3, type SceneElement } from '../scene/types';
-
-/** 把数值写成 LaTeX：小量用科学计数法，例如 1.00×10⁻⁹ C */
-function texValue(value: number, unit?: string): string {
-  const suffix = unit ? `\\ \\text{${unit}}` : '';
-  if (value === 0) return `0${suffix}`;
-
-  const abs = Math.abs(value);
-  if (abs >= 1e-3 && abs < 1e4) return `${value.toFixed(2)}${suffix}`;
-
-  const exponent = Math.floor(Math.log10(abs));
-  const mantissa = value / 10 ** exponent;
-  return `${mantissa.toFixed(2)}\\times 10^{${exponent}}${suffix}`;
-}
+import { PALETTE, PARAM_SPECS, createElement, defaultPosition, elementLabel } from '../scene/catalog';
+import type { SceneStore } from '../scene/store';
+import type { SceneElement } from '../scene/types';
+import { createParamControl } from './params';
 
 /** 左侧折叠抽屉：要素库 + 选中要素的属性 */
 export function mountPanel(store: SceneStore, root: ParentNode = document): void {
@@ -37,19 +24,8 @@ export function mountPanel(store: SceneStore, root: ParentNode = document): void
     btn.className = 'palette__item';
     btn.textContent = `＋ ${item.label}`;
     btn.addEventListener('click', () => {
-      // 用黄金角在原点周围铺开，避免新要素互相重叠
       const n = store.snapshot.elements.length;
-      const angle = n * 2.399963229728653;
-      const radius = 1.6 + Math.floor(n / 6) * 0.9;
-      const element: SceneElement = {
-        id: nextId(),
-        kind: item.kind,
-        position: vec3(radius * Math.cos(angle), 0, radius * Math.sin(angle)),
-        direction: vec3(0, 0, 1),
-        velocity: vec3(),
-        params: { ...item.defaults },
-      };
-      store.addElement(element);
+      store.addElement(createElement(item, defaultPosition(n)));
     });
     paletteBox.appendChild(btn);
   }
@@ -80,36 +56,11 @@ export function mountPanel(store: SceneStore, root: ParentNode = document): void
     titleEl = title;
 
     for (const spec of PARAM_SPECS[element.kind] ?? []) {
-      const row = document.createElement('label');
-      row.className = 'props__row';
-
-      const name = document.createElement('span');
-      name.className = 'props__name';
-      // 单位交给右侧的 LaTeX 数值，标签里不再重复
-      name.textContent = spec.label;
-
-      const input = document.createElement('input');
-      input.type = 'range';
-      input.min = String(spec.min);
-      input.max = String(spec.max);
-      input.step = String(spec.step);
-      input.value = String(element.params[spec.key] ?? 0);
-
-      const out = document.createElement('span');
-      out.className = 'props__value';
-      renderTex(out, texValue(element.params[spec.key] ?? 0, spec.unit));
-
-      input.addEventListener('input', () => {
-        const value = Number(input.value);
-        const current = store.snapshot.elements.find((e) => e.id === element.id)?.params ?? {};
-        const params = { ...current, [spec.key]: value };
-        store.updateElement(element.id, { params });
-        renderTex(out, texValue(value, spec.unit));
-        if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
-      });
-
-      row.append(name, input, out);
-      propsBody.appendChild(row);
+      propsBody.appendChild(
+        createParamControl(store, element, spec, (params) => {
+          if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
+        }),
+      );
     }
   };
 

@@ -16,6 +16,11 @@
       <button type="button" class="seg__btn" data-field="both">同时</button>
     </div>
     <button id="toggle-arrows" type="button" class="btn btn--sm is-on" aria-pressed="true">方向箭头</button>
+    <label class="sim-topbar__control" title="场线密度">
+      <span>线密度</span>
+      <input id="line-density" type="range" min="0" max="2" step="1" aria-label="场线密度">
+      <span id="line-density-label" class="sim-topbar__value">中</span>
+    </label>
     <span class="sim-topbar__spacer"></span>
     <div id="sim-legend" class="legend" hidden>
       <div id="legend-e" class="legend__row" hidden>
@@ -44,8 +49,10 @@
   </aside>
 
   <footer id="sim-hint" class="sim-hint">
-    点左侧「要素」添加电荷；拖动圆点移动，左键旋转视角，滚轮缩放。
+    左键旋转 · 中键平移 · 滚轮缩放；拖动圆点移动电荷，右键空白处添加、右键电荷删除
   </footer>
+
+  <div id="ctx-menu" class="ctx" hidden></div>
 
   <!-- Wasm 胶水代码（经典脚本，挂载全局 FieldLineModule） -->
   <script src="./bin/field_line.js"></script>

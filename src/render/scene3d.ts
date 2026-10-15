@@ -30,6 +30,12 @@ export function createScene3D(container: HTMLElement): Scene3D {
   orbit.dampingFactor = 0.08;
   orbit.minDistance = 1.2;
   orbit.maxDistance = 60;
+  // 右键让给上下文菜单，平移改到中键（滚轮缩放不变）
+  orbit.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: null,
+  };
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.5));
   const key = new THREE.DirectionalLight(0xffffff, 2.2);

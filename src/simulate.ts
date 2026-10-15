@@ -5,8 +5,10 @@ import { FieldEngine, type TraceOptions } from './physics/wasm';
 import { ElementViews } from './render/elements3d';
 import { FieldLines } from './render/fieldLines';
 import { createScene3D } from './render/scene3d';
-import { nextId, SceneStore } from './scene/store';
+import { PALETTE, createElement } from './scene/catalog';
+import { SceneStore } from './scene/store';
 import { vec3, type SceneElement } from './scene/types';
+import { mountContextMenu } from './ui/contextMenu';
 import { mountPanel } from './ui/panel';
 import { mountToolbar } from './ui/toolbar';
 
@@ -22,8 +24,14 @@ const scene3d = createScene3D(viewport);
 const elementViews = new ElementViews(scene3d, store);
 const fieldLines = new FieldLines(scene3d.scene, scene3d.size());
 
+// mountPanel 之外再挂右键菜单：空白处添加、要素上删除
 mountToolbar(store);
 mountPanel(store);
+mountContextMenu(store, {
+  canvas: scene3d.canvas,
+  pickAt: (x, y) => elementViews.pickAt(x, y),
+  pickGround: (x, y) => elementViews.pickGround(x, y),
+});
 
 scene3d.onResize(() => {
   const { width, height } = scene3d.size();
@@ -43,7 +51,7 @@ function retrace(): void {
   const state = store.snapshot;
   engine.upload(state.elements);
 
-  const seeds = buildSeeds(state.elements);
+  const seeds = buildSeeds(state.elements, state.lineDensity);
   const wantE = state.fieldMode !== 'B';
   const wantB = state.fieldMode !== 'E';
 
@@ -73,16 +81,11 @@ scene3d.onFrame(() => {
 
 /** 初始给一个电偶极子示例，方便一眼看到效果（可删） */
 function seedDemoScene(): void {
-  const charge = (x: number, q: number): SceneElement => ({
-    id: nextId(),
-    kind: 'charge',
-    position: vec3(x, 0, 0),
-    direction: vec3(0, 0, 1),
-    velocity: vec3(),
-    params: { q },
-  });
-  store.addElement(charge(-1.2, 1e-9));
-  store.addElement(charge(1.2, -1e-9));
+  const positive = PALETTE.find((item) => item.id === 'charge+');
+  const negative = PALETTE.find((item) => item.id === 'charge-');
+  if (!positive || !negative) return;
+  store.addElement(createElement(positive, vec3(-1.2, 0, 0)));
+  store.addElement(createElement(negative, vec3(1.2, 0, 0)));
   store.select(null);
 }
 

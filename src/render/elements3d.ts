@@ -3,7 +3,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { elementColor } from '../scene/catalog';
 import type { SceneStore } from '../scene/store';
-import type { SceneElement } from '../scene/types';
+import type { SceneElement, Vec3 } from '../scene/types';
 import type { Scene3D } from './scene3d';
 
 const SPHERE_RADIUS = 0.12;
@@ -14,7 +14,10 @@ const CLICK_SLOP_PX = 4;
 export class ElementViews {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.Camera;
+  private readonly canvas: HTMLCanvasElement;
   private readonly transform: TransformControls;
+  private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly groundPoint = new THREE.Vector3();
   private readonly views = new Map<string, THREE.Mesh>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -26,6 +29,7 @@ export class ElementViews {
   constructor(scene3d: Scene3D, store: SceneStore) {
     this.scene = scene3d.scene;
     this.camera = scene3d.camera;
+    this.canvas = scene3d.canvas;
 
     const transform = new TransformControls(scene3d.camera, scene3d.canvas);
     transform.setSize(0.85);
@@ -82,19 +86,32 @@ export class ElementViews {
     scene3d.canvas.addEventListener('pointerup', (event: PointerEvent) => {
       if (transform.dragging || transform.axis !== null) return;
       if (Math.hypot(event.clientX - this.downX, event.clientY - this.downY) > CLICK_SLOP_PX) return;
-      store.select(this.pick(event));
+      store.select(this.pickAt(event.clientX, event.clientY));
     });
   }
 
-  private pick(event: PointerEvent): string | null {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  /** 屏幕坐标 -> 归一化设备坐标，并据此更新射线 */
+  private castFrom(clientX: number, clientY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
     this.pointer.set(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
+  }
+
+  /** 命中的要素 id；没命中返回 null */
+  pickAt(clientX: number, clientY: number): string | null {
+    this.castFrom(clientX, clientY);
     const hit = this.raycaster.intersectObjects([...this.views.values()], false)[0];
     return hit ? (hit.object.userData.id as string) : null;
+  }
+
+  /** 射线与地面 y=0 的交点：右键「空白处添加」的落点 */
+  pickGround(clientX: number, clientY: number): Vec3 | null {
+    this.castFrom(clientX, clientY);
+    const hit = this.raycaster.ray.intersectPlane(this.groundPlane, this.groundPoint);
+    return hit ? { x: hit.x, y: 0, z: hit.z } : null;
   }
 
   /** 与 store 对齐：新建/删除/移动要素网格，并同步选中态 */

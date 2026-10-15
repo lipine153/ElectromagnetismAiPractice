@@ -34,7 +34,7 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
   - `src/physics/` — `wasm.ts` (the ONLY place that talks to Wasm), `seeds.ts` (seed points).
   - `src/render/` — `scene3d.ts`, `elements3d.ts` (meshes + TransformControls), `fieldLines.ts`,
     `colors.ts`.
-  - `src/ui/` — `toolbar.ts`, `panel.ts`.
+  - `src/ui/` — `toolbar.ts`, `panel.ts`, `contextMenu.ts`, `params.ts` (shared slider control).
 - `src/game/`, `src/models/` — quiz logic and its inline SVG diagrams.
 - `src/styles/app.css` — the single design-token source (`@theme`) + all components.
 - `cpp/` — `vec3.hpp` (minimal vector math), `source.hpp` (source kinds/encoding),
@@ -52,6 +52,12 @@ magnetostatics, induction, displacement current.
 Field-line gotchas (each of these was got wrong once already):
 - **Seeding**: every charge gets seed points and is traced *outward* by its own sign (positive
   forward, negative reverse). Seeding only positive charges made the two ends look asymmetric.
+  The seed directions come from `DENSITY_LEVELS` in `seeds.ts` — **geodesic subdivisions of the
+  icosahedron** (12 / 42 / 92 directions), which is what the top-bar 线密度 discrete slider
+  picks between. Every level is closed under x→−x / y→−y / z→−z, so the symmetry property is
+  kept as density grows. An evenly-spread but *asymmetric* set (Fibonacci sphere) made a
+  symmetric dipole render lopsided — measured: only 4/24 directions had a mirror partner and
+  0/24 traced curves paired.
 - **Strength encoding**: one **global** log colour scale per field, spanning an adaptive 2–4
   decades of the scene's actual `|F|` range — never per-line normalisation, which makes every
   line span the whole ramp and hides the differences. On top of the colour, `fieldLines.ts`
@@ -134,4 +140,10 @@ Sanity check after a rebuild: one `+1e-9 C` charge at the origin → `_eval_fiel
   `<` is fine); diagram labels are **bare LaTeX** rendered with `renderTex`, not auto-render.
 - `TransformControls` (three r186) must be added to the scene via `transform.getHelper()`,
   and `dragging-changed` is what disables `OrbitControls` while dragging.
+- Sandbox mouse mapping is **not** the OrbitControls default: **right = context menu**,
+  middle = pan, left = rotate (`scene3d.ts`). `src/ui/contextMenu.ts` shows add-on-empty /
+  delete-on-element, and new elements spawn at the ground point under the cursor
+  (`ElementViews.pickGround`). Right-click always `preventDefault()`s the native menu. The menu
+  also hosts the element's parameter sliders — the same control the properties panel uses
+  (`createParamControl` in `src/ui/params.ts`), so a charge's value can be edited from either.
 - No automated tests. Verify UI in a browser; verify Wasm with the Node snippet above.

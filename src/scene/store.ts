@@ -6,17 +6,13 @@ export interface SceneState {
   fieldMode: FieldMode;
   /** 是否显示场线方向箭头 */
   showArrows: boolean;
+  /** 场线密度档位（对应 physics/seeds.ts 的 DENSITY_LEVELS） */
+  lineDensity: number;
   /** 是否正在拖拽某个要素 */
   dragging: boolean;
 }
 
 type Listener = (state: Readonly<SceneState>) => void;
-
-let seq = 0;
-export function nextId(): string {
-  seq += 1;
-  return `el-${seq}`;
-}
 
 /** 场景的单一状态源：要素列表 / 选中项 / 显示模式 */
 export class SceneStore {
@@ -25,6 +21,7 @@ export class SceneStore {
     selectedId: null,
     fieldMode: 'E',
     showArrows: true,
+    lineDensity: 1,
     dragging: false,
   };
   private listeners = new Set<Listener>();
@@ -77,6 +74,10 @@ export class SceneStore {
 
   setShowArrows(show: boolean): void {
     this.patch({ showArrows: show });
+  }
+
+  setLineDensity(level: number): void {
+    this.patch({ lineDensity: level });
   }
 
   setDragging(dragging: boolean): void {

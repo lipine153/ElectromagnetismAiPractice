@@ -1,3 +1,4 @@
+import { DENSITY_LABELS, DENSITY_LEVELS } from '../physics/seeds';
 import type { SceneStore } from '../scene/store';
 import type { FieldMode } from '../scene/types';
 
@@ -18,6 +19,16 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
     store.setShowArrows(!store.snapshot.showArrows);
   });
 
+  // ---------- 线密度（非连续滑块）----------
+  const density = root.querySelector<HTMLInputElement>('#line-density');
+  if (density) {
+    density.min = '0';
+    density.max = String(DENSITY_LEVELS.length - 1);
+    density.step = '1';
+    density.addEventListener('input', () => store.setLineDensity(Number(density.value)));
+  }
+  const densityLabel = root.querySelector<HTMLElement>('#line-density-label');
+
   const legend = root.querySelector<HTMLElement>('#sim-legend');
   const eLegend = root.querySelector<HTMLElement>('#legend-e');
   const bLegend = root.querySelector<HTMLElement>('#legend-b');
@@ -30,6 +41,8 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
       arrowBtn.classList.toggle('is-on', state.showArrows);
       arrowBtn.setAttribute('aria-pressed', String(state.showArrows));
     }
+    if (density) density.value = String(state.lineDensity);
+    if (densityLabel) densityLabel.textContent = DENSITY_LABELS[state.lineDensity] ?? '—';
     const showE = state.fieldMode !== 'B';
     const showB = state.fieldMode !== 'E';
     if (legend) legend.hidden = !showE && !showB;
