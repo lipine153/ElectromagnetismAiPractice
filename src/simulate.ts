@@ -1,6 +1,6 @@
 import './styles/app.css';
 
-import { buildSeeds } from './physics/seeds';
+import { buildSeeds, buildWireSeeds } from './physics/seeds';
 import { FieldEngine, type TraceOptions } from './physics/wasm';
 import { ElementViews } from './render/elements3d';
 import { FieldLines } from './render/fieldLines';
@@ -8,7 +8,7 @@ import { createScene3D } from './render/scene3d';
 import { PALETTE, createElement } from './scene/catalog';
 import { SceneStore } from './scene/store';
 import { vec3, type SceneElement } from './scene/types';
-import { mountContextMenu } from './ui/contextMenu';
+import { createMenuHost, mountContextMenu } from './ui/contextMenu';
 import { mountPanel } from './ui/panel';
 import { mountToolbar } from './ui/toolbar';
 
@@ -24,14 +24,18 @@ const scene3d = createScene3D(viewport);
 const elementViews = new ElementViews(scene3d, store);
 const fieldLines = new FieldLines(scene3d.scene, scene3d.size());
 
-// mountPanel 之外再挂右键菜单：空白处添加、要素上删除
+// mountPanel 之外再挂右键菜单：空白处添加、要素上删除/改参数/增删节点
+const menuHost = createMenuHost(store);
 mountToolbar(store);
-mountPanel(store);
-mountContextMenu(store, {
-  canvas: scene3d.canvas,
-  pickAt: (x, y) => elementViews.pickAt(x, y),
-  pickGround: (x, y) => elementViews.pickGround(x, y),
-});
+mountPanel(store, menuHost);
+if (menuHost) {
+  mountContextMenu(store, {
+    canvas: scene3d.canvas,
+    pickAt: (x, y) => elementViews.pickAt(x, y),
+    pickGround: (x, y) => elementViews.pickGround(x, y),
+    selectNode: (index) => elementViews.setSelectedNode(index),
+  }, menuHost);
+}
 
 scene3d.onResize(() => {
   const { width, height } = scene3d.size();
@@ -42,30 +46,27 @@ let engine: FieldEngine | null = null;
 let retraceDirty = true;
 let lastTraceAt = 0;
 
-/** 阶段 0 只有电学；磁学场源在后续阶段加入 */
+/** 阶段 2：磁学来自通电导线 */
 const hasMagneticSource = (list: readonly SceneElement[]): boolean =>
-  list.some((e) => e.kind !== 'charge');
+  list.some((e) => e.kind === 'straightWire' && (e.params.i ?? 0) !== 0);
 
 function retrace(): void {
   if (!engine) return;
   const state = store.snapshot;
   engine.upload(state.elements);
 
-  const seeds = buildSeeds(state.elements, state.lineDensity);
   const wantE = state.fieldMode !== 'B';
   const wantB = state.fieldMode !== 'E';
 
-  fieldLines.update('E', wantE && seeds.length > 0 ? engine.trace('E', seeds, TRACE) : null);
+  const eSeeds = buildSeeds(state.elements, state.lineDensity);
+  fieldLines.update('E', wantE && eSeeds.length > 0 ? engine.trace('E', eSeeds, TRACE) : null);
 
-  if (wantB && hasMagneticSource(state.elements)) {
-    fieldLines.update('B', engine.trace('B', seeds, TRACE));
-  } else {
-    fieldLines.update('B', null);
-  }
+  const bSeeds = buildWireSeeds(state.elements, state.lineDensity);
+  fieldLines.update('B', wantB && hasMagneticSource(state.elements) ? engine.trace('B', bSeeds, TRACE) : null);
 }
 
 store.subscribe((state) => {
-  elementViews.sync(state.elements, state.selectedId, state.dragging);
+  elementViews.sync(state.elements, state.selectedId, state.dragging, scene3d.size());
   fieldLines.setArrowsVisible(state.showArrows);
   retraceDirty = true;
 });
@@ -79,13 +80,21 @@ scene3d.onFrame(() => {
   retrace();
 });
 
-/** 初始给一个电偶极子示例，方便一眼看到效果（可删） */
+/** 初始示例：一个电偶极子 + 一个圆形电流环（可删） */
 function seedDemoScene(): void {
   const positive = PALETTE.find((item) => item.id === 'charge+');
   const negative = PALETTE.find((item) => item.id === 'charge-');
-  if (!positive || !negative) return;
-  store.addElement(createElement(positive, vec3(-1.2, 0, 0)));
-  store.addElement(createElement(negative, vec3(1.2, 0, 0)));
+  const wire = PALETTE.find((item) => item.id === 'wire');
+
+  if (positive) store.addElement(createElement(positive, vec3(-1.2, 0, 0)));
+  if (negative) store.addElement(createElement(negative, vec3(1.2, 0, 0)));
+  if (wire) {
+    // 只有这一个示例是圆环（闭合）；之后从要素库新加的导线默认是开放直导线
+    const loop = createElement(wire, vec3(0, 0, 2.5));
+    loop.params.closed = 1;
+    store.addElement(loop);
+  }
+
   store.select(null);
 }
 

@@ -1,3 +1,4 @@
+import { wireSegments } from '../scene/geometry';
 import { SOURCE_KIND, SOURCE_STRIDE, type SceneElement, type Vec3 } from '../scene/types';
 
 export interface TraceOptions {
@@ -20,8 +21,8 @@ export interface TracedLines {
   lines: TracedLine[];
 }
 
-const MAX_SOURCES = 256;
-const MAX_SEEDS = 1024;
+const MAX_SOURCES = 1024;
+const MAX_SEEDS = 4096;
 
 /** 把要素参数映射到 wasm 侧的 (p0, p1)，与 cpp/include/source.hpp 对应 */
 function packParams(el: SceneElement): [number, number] {
@@ -70,37 +71,56 @@ export class FieldEngine {
     return new FieldEngine(module);
   }
 
-  /** 用当前要素整体替换场源列表 */
+  /** 用当前要素整体替换场源列表（导线会展开成多段） */
   upload(elements: readonly SceneElement[]): void {
-    const count = Math.min(elements.length, MAX_SOURCES);
-    const view = new Float64Array(this.module.HEAPF64.buffer, this.sourcePtr, count * SOURCE_STRIDE);
-    for (let i = 0; i < count; i += 1) {
-      const el = elements[i];
-      const o = i * SOURCE_STRIDE;
-      view[o] = SOURCE_KIND[el.kind];
-      view[o + 1] = el.position.x;
-      view[o + 2] = el.position.y;
-      view[o + 3] = el.position.z;
-      view[o + 4] = el.direction.x;
-      view[o + 5] = el.direction.y;
-      view[o + 6] = el.direction.z;
-      view[o + 7] = el.velocity.x;
-      view[o + 8] = el.velocity.y;
-      view[o + 9] = el.velocity.z;
-      const [p0, p1] = packParams(el);
+    const view = new Float64Array(
+      this.module.HEAPF64.buffer,
+      this.sourcePtr,
+      MAX_SOURCES * SOURCE_STRIDE,
+    );
+    let count = 0;
+
+    const push = (kind: number, pos: Vec3, dir: Vec3, p0: number, p1: number): void => {
+      if (count >= MAX_SOURCES) return;
+      const o = count * SOURCE_STRIDE;
+      view[o] = kind;
+      view[o + 1] = pos.x;
+      view[o + 2] = pos.y;
+      view[o + 3] = pos.z;
+      view[o + 4] = dir.x;
+      view[o + 5] = dir.y;
+      view[o + 6] = dir.z;
+      view[o + 7] = 0; // 速度（运动源后续阶段用）
+      view[o + 8] = 0;
+      view[o + 9] = 0;
       view[o + 10] = p0;
       view[o + 11] = p1;
+      count += 1;
+    };
+
+    for (const el of elements) {
+      if (el.kind === 'straightWire') {
+        // 折线 → 多段直线（含圆离散、闭合段、两端无穷延伸）
+        const current = el.params.i ?? 0;
+        for (const seg of wireSegments(el)) {
+          push(SOURCE_KIND.straightWire, seg.a, seg.dir, current, seg.len);
+        }
+        continue;
+      }
+      const [p0, p1] = packParams(el);
+      push(SOURCE_KIND[el.kind], el.position, el.direction, p0, p1);
     }
+
     this.module._set_sources(this.sourcePtr, count);
   }
 
   /** 追踪一批场线。seeds 为 stride 4：[x, y, z, sign] */
   trace(field: 'E' | 'B', seeds: Float64Array, opts: TraceOptions): TracedLines {
-    const seedCount = Math.floor(seeds.length / 4);
+    const seedCount = Math.min(Math.floor(seeds.length / 4), MAX_SEEDS);
     if (seedCount === 0) return { data: new Float32Array(0), lines: [] };
 
-    const seedView = new Float64Array(this.module.HEAPF64.buffer, this.seedPtr, seeds.length);
-    seedView.set(seeds);
+    const seedView = new Float64Array(this.module.HEAPF64.buffer, this.seedPtr, seedCount * 4);
+    seedView.set(seeds.subarray(0, seedCount * 4));
 
     const resPtr = this.module._trace_lines(
       field === 'E' ? 0 : 1,

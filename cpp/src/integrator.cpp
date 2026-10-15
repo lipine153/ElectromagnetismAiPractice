@@ -10,6 +10,9 @@ Vec3 fieldAt(int field, const Vec3& pos) {
 
 }  // namespace
 
+/** 闭合判定前至少要走的步数，避免刚起步就误判为"绕回起点" */
+constexpr int kCloseCheckAfter = 24;
+
 Vec3 rk4Step(int field, int sign, const Vec3& pos, double ds) {
     const double s = static_cast<double>(sign);
     const Vec3 k1 = fieldAt(field, pos).normalized() * s;
@@ -31,6 +34,8 @@ void traceInto(int field, int sign, const Vec3& seed, double step, int maxSteps,
         const double magnitude = f.norm();
         if (magnitude < 1e-12) break;  // 到了场的零点，停
         if (i > 0 && distanceToNearestSource(current) < stopRadius) break;  // 贴到源上，停
+        // 绕回起点附近就停：磁力线是闭合的，否则会一圈圈重复画
+        if (i > kCloseCheckAfter && (current - seed).norm() < step * 1.5) break;
 
         out.push_back(static_cast<float>(current.x));
         out.push_back(static_cast<float>(current.y));

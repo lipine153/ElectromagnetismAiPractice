@@ -27,12 +27,14 @@ export interface SceneElement {
   id: string;
   kind: ElementKind;
   position: Vec3;
-  /** 方向（单位向量）；点电荷用不到，磁源会用 */
+  /** 方向（单位向量）；点电荷用不到，圆环用它存法向 */
   direction: Vec3;
   /** 速度，拖拽时更新；运动源会用到 */
   velocity: Vec3;
-  /** 各 kind 的参数，例如电荷的 q */
+  /** 各 kind 的参数，例如电荷的 q、导线的 i / closed */
   params: Record<string, number>;
+  /** 折线要素（通电导线）的节点；其它要素为空 */
+  nodes?: Vec3[];
 }
 
 export type FieldMode = 'E' | 'B' | 'both';

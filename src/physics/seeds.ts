@@ -1,4 +1,5 @@
-import type { SceneElement } from '../scene/types';
+import { normalize, wireCenterline } from '../scene/geometry';
+import type { SceneElement, Vec3 } from '../scene/types';
 
 const SEED_RADIUS = 0.15;
 
@@ -108,4 +109,119 @@ export function buildSeeds(elements: readonly SceneElement[], level = 0): Float6
     }
   }
   return out;
+}
+
+// ===================== 导线的磁场线种子 =====================
+
+/** 沿导线撒种子的档位：沿程位置数 / 半径组 / 两端延伸处采样数 */
+const WIRE_SEED_LEVELS = [
+  { along: 5, radii: [0.35, 0.7], extend: 2 },
+  { along: 7, radii: [0.35, 0.7, 1.1], extend: 3 },
+  { along: 9, radii: [0.3, 0.55, 0.85, 1.2], extend: 4 },
+];
+
+const sub = (p: Vec3, q: Vec3): Vec3 => ({ x: p.x - q.x, y: p.y - q.y, z: p.z - q.z });
+const cross = (p: Vec3, q: Vec3): Vec3 => ({
+  x: p.y * q.z - p.z * q.y,
+  y: p.z * q.x - p.x * q.z,
+  z: p.x * q.y - p.y * q.x,
+});
+
+/** 与切线垂直的一对正交方向 */
+function perpendicularBasis(t: Vec3): [Vec3, Vec3] {
+  const ref: Vec3 = Math.abs(t.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  const u = normalize(cross(t, ref));
+  const v = normalize(cross(t, u));
+  return [u, v];
+}
+
+/** 沿折线按参数 t∈[0,1] 取点与切线 */
+function samplePolyline(
+  points: readonly Vec3[],
+  closed: boolean,
+  t: number,
+): { base: Vec3; tangent: Vec3 } | null {
+  const pts = closed ? [...points, points[0]] : [...points];
+  const segs: number[] = [];
+  let total = 0;
+  for (let i = 1; i < pts.length; i += 1) {
+    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y, pts[i].z - pts[i - 1].z);
+    segs.push(d);
+    total += d;
+  }
+  if (!(total > 1e-9)) return null;
+
+  let target = t * total;
+  for (let i = 1; i < pts.length; i += 1) {
+    const d = segs[i - 1];
+    if (target <= d || i === pts.length - 1) {
+      const f = d > 1e-12 ? Math.min(1, target / d) : 0;
+      const p0 = pts[i - 1];
+      const p1 = pts[i];
+      return {
+        base: {
+          x: p0.x + (p1.x - p0.x) * f,
+          y: p0.y + (p1.y - p0.y) * f,
+          z: p0.z + (p1.z - p0.z) * f,
+        },
+        tangent: normalize(sub(p1, p0)),
+      };
+    }
+    target -= d;
+  }
+  return null;
+}
+
+/**
+ * 通电导线的磁场线种子：沿导线中心线取若干位置、在每个位置的**垂直平面**内按
+ * 若干半径偏移撒点。追踪出来就是环绕导线的闭合磁力线。
+ *
+ * 每个 (沿程位置, 半径) 只放一个种子——同一半径绕导线一圈本就是同一条磁力线，
+ * 多放只会重复绘制。
+ */
+export function buildWireSeeds(elements: readonly SceneElement[], level = 0): Float64Array {
+  const cfg = WIRE_SEED_LEVELS[clampDensity(level)];
+  const out: number[] = [];
+
+  const pushSeed = (base: Vec3, tangent: Vec3, radius: number): void => {
+    const [u] = perpendicularBasis(tangent);
+    out.push(base.x + u.x * radius, base.y + u.y * radius, base.z + u.z * radius, 1);
+  };
+
+  for (const element of elements) {
+    if (element.kind !== 'straightWire' || (element.params.i ?? 0) === 0) continue;
+
+    const { points, closed } = wireCenterline(element);
+    if (points.length < 2) continue;
+
+    for (let k = 0; k < cfg.along; k += 1) {
+      const t = closed ? (k + 0.5) / cfg.along : k / Math.max(1, cfg.along - 1);
+      const sample = samplePolyline(points, closed, t);
+      if (!sample) continue;
+      for (const radius of cfg.radii) pushSeed(sample.base, sample.tangent, radius);
+    }
+
+    // 开放导线：两端延伸段方向上也补几颗，否则延伸出去的那段导线附近没有磁力线
+    if (!closed) {
+      const head = points[0];
+      const tail = points[points.length - 1];
+      const headDir = normalize(sub(head, points[1]));
+      const tailDir = normalize(sub(tail, points[points.length - 2]));
+      for (let k = 1; k <= cfg.extend; k += 1) {
+        const distance = k * 1.2;
+        pushSeed(
+          { x: head.x + headDir.x * distance, y: head.y + headDir.y * distance, z: head.z + headDir.z * distance },
+          headDir,
+          cfg.radii[0],
+        );
+        pushSeed(
+          { x: tail.x + tailDir.x * distance, y: tail.y + tailDir.y * distance, z: tail.z + tailDir.z * distance },
+          tailDir,
+          cfg.radii[0],
+        );
+      }
+    }
+  }
+
+  return new Float64Array(out);
 }

@@ -20,6 +20,29 @@ Vec3 chargeField(const Source& s, const Vec3& pos) {
     return d * (kCoulomb * s.p0 / (r2 * std::sqrt(r2)));
 }
 
+// 有限长直导线的毕奥-萨伐尔段场（解析解）：
+//   B = μ0 I /4π · (L×a)/|L×a|² · [ (|L|² − a·L)/|b| + (a·L)/|a| ]
+//   A = s.pos（起点）、L = dir * p1（段矢量，p1 = 段长）、a = P − A、b = P − B = a − L
+// p1 取很大时该式就是"延伸到无穷远"的半无限/无限长导线（段拉长时收敛到 μ0I/2πρ）。
+constexpr double kMu0Over4Pi = kMu0 / (4.0 * kPi);
+
+Vec3 wireField(const Source& s, const Vec3& pos) {
+    const Vec3 seg = s.dir * s.p1;
+    const Vec3 a = pos - s.pos;
+    const Vec3 b = a - seg;
+    const Vec3 cross = seg.cross(a);
+
+    const double crossSq = cross.normSq();
+    if (crossSq < 1e-18) return Vec3{};  // 场点落在导线上
+
+    const double aLen = a.norm();
+    const double bLen = b.norm();
+    if (aLen < 1e-12 || bLen < 1e-12) return Vec3{};
+
+    const double bracket = (seg.normSq() - a.dot(seg)) / bLen + a.dot(seg) / aLen;
+    return cross * (kMu0Over4Pi * s.p0 * bracket / crossSq);
+}
+
 }  // namespace
 
 void setSources(const std::vector<Source>& sources) { g_sources = sources; }
@@ -42,14 +65,23 @@ Vec3 evalE(const Vec3& pos) {
 
 Vec3 evalB(const Vec3& pos) {
     Vec3 b{};
-    // 阶段 0 只有电学场源，磁学部分在后续阶段加入。
-    (void)pos;
+    for (const Source& s : g_sources) {
+        switch (s.kind) {
+            case kStraightWire:
+                b += wireField(s, pos);
+                break;
+            default:
+                break;
+        }
+    }
     return b;
 }
 
 double distanceToNearestSource(const Vec3& pos) {
     double best = 1e300;
     for (const Source& s : g_sources) {
+        // 线状源（导线）不参与"贴源收线"：磁力线本就环绕导线，不该在导线附近被截断
+        if (s.kind == kStraightWire) continue;
         const double d = (pos - s.pos).norm();
         if (d < best) best = d;
     }

@@ -33,26 +33,46 @@ export function createParamControl(
   name.className = 'param__name';
   name.textContent = spec.label;
 
-  const input = document.createElement('input');
-  input.type = 'range';
-  input.className = 'param__input';
-  input.min = String(spec.min);
-  input.max = String(spec.max);
-  input.step = String(spec.step);
-  input.value = String(element.params[spec.key] ?? 0);
+  const read = (params: Record<string, number>): number => params[spec.key] ?? 0;
+
+  const commit = (raw: number): void => {
+    const current = store.snapshot.elements.find((e) => e.id === element.id)?.params ?? {};
+    const params = { ...current, [spec.key]: raw };
+    store.updateElement(element.id, { params });
+    onChange?.(params);
+  };
 
   const value = document.createElement('span');
   value.className = 'param__value';
-  renderTex(value, texValue(element.params[spec.key] ?? 0, spec.unit));
 
-  input.addEventListener('input', () => {
-    const next = Number(input.value);
-    const current = store.snapshot.elements.find((e) => e.id === element.id)?.params ?? {};
-    const params = { ...current, [spec.key]: next };
-    store.updateElement(element.id, { params });
-    renderTex(value, texValue(next, spec.unit));
-    onChange?.(params);
-  });
+  let input: HTMLInputElement;
+
+  if (spec.type === 'toggle') {
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'param__input param__input--toggle';
+    input.checked = read(element.params) > 0.5;
+    value.textContent = input.checked ? '开' : '关';
+    input.addEventListener('change', () => {
+      const next = input.checked ? 1 : 0;
+      commit(next);
+      value.textContent = next ? '开' : '关';
+    });
+  } else {
+    input = document.createElement('input');
+    input.type = 'range';
+    input.className = 'param__input';
+    input.min = String(spec.min);
+    input.max = String(spec.max);
+    input.step = String(spec.step);
+    input.value = String(read(element.params));
+    renderTex(value, texValue(read(element.params), spec.unit));
+    input.addEventListener('input', () => {
+      const next = Number(input.value);
+      commit(next);
+      renderTex(value, texValue(next, spec.unit));
+    });
+  }
 
   row.append(name, input, value);
   return row;

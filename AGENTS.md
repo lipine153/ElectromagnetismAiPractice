@@ -30,11 +30,13 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
 - `src/simulate.ts` — sandbox entry (assembly). `src/quiz.ts` — quiz entry. `src/main.ts` is gone.
 - Sandbox modules:
   - `src/scene/` — `types.ts` (Vec3 / ElementKind / SceneElement), `catalog.ts` (palette +
-    param specs), `store.ts` (single state source).
+    param specs), `store.ts` (single state source), `geometry.ts` (wire → straight segments),
+    `ops.ts` (node add/remove).
   - `src/physics/` — `wasm.ts` (the ONLY place that talks to Wasm), `seeds.ts` (seed points).
-  - `src/render/` — `scene3d.ts`, `elements3d.ts` (meshes + TransformControls), `fieldLines.ts`,
-    `colors.ts`.
-  - `src/ui/` — `toolbar.ts`, `panel.ts`, `contextMenu.ts`, `params.ts` (shared slider control).
+  - `src/render/` — `scene3d.ts`, `elements3d.ts` (meshes + TransformControls),
+    `wireView.ts` (conductor + node handles + current arrows), `fieldLines.ts`, `colors.ts`.
+  - `src/ui/` — `toolbar.ts`, `panel.ts` (two tabs), `contextMenu.ts` (menu host),
+    `elementMenu.ts` (shared menu content), `params.ts` (shared slider control).
 - `src/game/`, `src/models/` — quiz logic and its inline SVG diagrams.
 - `src/styles/app.css` — the single design-token source (`@theme`) + all components.
 - `cpp/` — `vec3.hpp` (minimal vector math), `source.hpp` (source kinds/encoding),
@@ -43,11 +45,30 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
 - `public/bin/` — committed Wasm build output: `field_line.js` (glue) + `field_line.wasm`.
 - `build/`, `dist/`, `node_modules/` — gitignored.
 
-## Sandbox architecture (phase 0: electrostatics only)
+## Sandbox architecture (phase 2: electrostatics + a current-carrying wire)
 `SceneStore.elements[]` → packed into doubles → `_set_sources` → C++ sums E/B at any point →
 `seeds.ts` generates seed points → `_trace_lines` → three.js `Line2` groups. Field lines are
-retraced at ~15fps while the scene changes, never per frame at 60fps. Phases still to come:
-magnetostatics, induction, displacement current.
+retraced at ~15fps while the scene changes, never per frame at 60fps. Still to come: induction,
+displacement current.
+
+**The wire (`straightWire`) is the only non-point element.** C++ knows nothing about polylines:
+`src/scene/geometry.ts` expands a wire element into plain **finite straight segments** (one C++
+source each, `p0 = I`, `p1 = length`). The rules:
+| case | expansion |
+|---|---|
+| open, N nodes | each segment, **plus** a semi-infinite segment off each end (just a huge `p1`) |
+| closed, 2 nodes | circle whose diameter is the node pair, discretised into 32 segments |
+| closed, >2 nodes | the polygon segments plus a closing last→first segment |
+
+E/B seeds are built separately (`buildSeeds` for charges, `buildWireSeeds` for wires); the
+top-bar 线密度 slider drives both.
+
+Wire gotchas:
+- **Node handles must map to `element.nodes`, never to the rendered centreline points.** A
+  closed 2-node circle renders 33 centreline points but has only 2 real nodes — indexing
+  handles off the centreline made "delete node 2" remove node 1.
+- Whole-wire translate and loop rotate are driven by **invisible proxy objects** (the
+  TransformControls target), so the transform is never fought over or reset mid-drag.
 
 Field-line gotchas (each of these was got wrong once already):
 - **Seeding**: every charge gets seed points and is traced *outward* by its own sign (positive
@@ -79,9 +100,14 @@ the drawer or the context menu.
 - **Everything is selectable.** Click or right-click an element to select it; the selection
   drives both the drawer's properties section and the `TransformControls` gizmo. A newly added
   element is selected automatically.
-- **Right-click is the main editing surface** (`src/ui/contextMenu.ts`): on empty ground it
-  offers the palette and spawns the new element *under the cursor*; on an element it offers that
-  element's parameters plus 删除. Any new element kind must work through both paths.
+- **Right-click is the main editing surface** (`src/ui/contextMenu.ts` + `elementMenu.ts`): on
+  empty ground it offers the palette and spawns the new element *under the cursor*; on an
+  element it offers that element's parameters plus 删除; on a wire node it offers insert/delete
+  node. Any new element kind must work through every path.
+- **The drawer's 工作 tab is the scene outliner**: one row per element with an **E/B badge**
+  (`elementDomain`) + colour dot + label, both mouse buttons open the same menu, and an
+  「添加新要素」 button at the bottom. New elements are always independent elements — never
+  append into an existing wire.
 - **Edit in place.** Parameter sliders live both in the context menu and in the properties panel
   — always reuse `createParamControl` (`src/ui/params.ts`) rather than hand-rolling a slider, so
   the value renders as LaTeX and stays in sync with the panel/title.
@@ -95,7 +121,9 @@ the drawer or the context menu.
 - **Source encoding**: flat `double[]`, `kSourceStride = 12` per source:
   `kind, pos(3), dir(3), vel(3), p0, p1`. Kind codes and what `p0`/`p1` mean live in
   `cpp/include/source.hpp`; the TS side mirrors them in `src/scene/types.ts` (`SOURCE_KIND`)
-  and `src/physics/wasm.ts` (`packParams`).
+  and `src/physics/wasm.ts` (`packParams`). For `straightWire`, `pos` is the segment **start**,
+  `dir` the unit direction and `p1` the length — its field is the analytic finite-segment
+  Biot–Savart (see `cpp/src/field.cpp`); a huge `p1` is the "extends to infinity" idealisation.
 - **Seed encoding** for `_trace_lines`: flat `double[]`, stride 4 = `[x, y, z, sign]`
   (`sign < 0` traces against the field, used to draw lines arriving at negative charges).
 - **Exports** (set in `CMakeLists.txt`): `_malloc`, `_free`, `_set_sources`, `_trace_lines`,
