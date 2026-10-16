@@ -349,12 +349,20 @@ export class ElementViews {
       // 节点手柄常显，因此任何时候都能直接点中某个节点
       targets.push(view.body, ...view.handles.filter((h) => h.visible));
     }
+    // 自由点电荷的笔头（含预览箭头）也直接可点选；它是 Object3D，所以要递归找子网格
+    if (this.particleTargets) targets.push(this.particleTargets.object);
 
-    const hit = this.raycaster.intersectObjects(targets, false)[0];
+    const hit = this.raycaster.intersectObjects(targets, true)[0];
     if (!hit) return null;
+    // 命中点可能是子网格（粒子的笔头就是个 Object3D，网格是它的子节点），
+    // 所以沿祖先链找挂了 id 的那一层
+    let node: THREE.Object3D | null = hit.object;
+    while (node && typeof node.userData.id !== 'string') node = node.parent;
+    if (!node) return null;
+
     return {
-      id: hit.object.userData.id as string,
-      node: (hit.object.userData.node as number | undefined) ?? null,
+      id: node.userData.id as string,
+      node: (node.userData.node as number | undefined) ?? null,
       point: { x: hit.point.x, y: hit.point.y, z: hit.point.z },
     };
   }
@@ -383,6 +391,8 @@ export class ElementViews {
    */
   setParticleTarget(id: string | null, object: THREE.Object3D | null): void {
     this.particleTargets = id && object ? { id, object } : null;
+    // 射线命中后要靠 userData.id 找回是哪个要素，所以笔头也得挂上
+    if (this.particleTargets) this.particleTargets.object.userData.id = id;
   }
 
   /** 与 store 对齐：新建/删除/移动要素，重建导线几何，并同步选中态与手柄 */

@@ -64,18 +64,23 @@ export function buildMenuContent(
 
   if (element.kind === 'freeCharge') {
     // 放开 / 重置 / 清除轨迹（都在工作菜单里，顶栏不堆东西）
-    const params = element.params;
-    const run = readParticleRun(params.run);
+    //
+    // ⚠️ 参数必须**点击时**现读，不能在建菜单时快照：菜单里的滑条改完 store 就变了，
+    // 但按钮闭包还拿着旧的那份，一写回去就把用户刚调的 q / m / v₀ 覆盖掉了。
+    const liveParams = (): Record<string, number> =>
+      store.snapshot.elements.find((e) => e.id === element.id)?.params ?? {};
     const setRun = (next: number, bumpTrail: boolean): void => {
+      const current = liveParams();
       store.updateElement(element.id, {
         params: {
-          ...params,
+          ...current,
           run: next,
-          trailSeq: (params.trailSeq ?? 0) + (bumpTrail ? 1 : 0),
+          trailSeq: (current.trailSeq ?? 0) + (bumpTrail ? 1 : 0),
         },
       });
     };
 
+    const run = readParticleRun(element.params.run);
     if (run !== 'running') {
       items.push(
         makeButton(run === 'held' ? '放开 ▶' : '继续 ▶', false, () =>
@@ -84,7 +89,7 @@ export function buildMenuContent(
     }
     // 重置要连轨迹一起清：轨迹是一条连续折线，笔头瞬移回起点会画出一条假直线
     items.push(makeButton('重置（回起点）', false, () => setRun(PARTICLE_RUN_CODE.held, true), close));
-    items.push(makeButton('清除轨迹', false, () => setRun(params.run ?? 0, true), close));
+    items.push(makeButton('清除轨迹', false, () => setRun(element.params.run ?? 0, true), close));
   }
 
   if (element.kind === 'straightWire') {

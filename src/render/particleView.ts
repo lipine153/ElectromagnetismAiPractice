@@ -113,6 +113,8 @@ export class ParticleView {
     this.head.visible = element !== null;
     if (!element) {
       this.preview.visible = false;
+      // 粒子被删掉时笔迹也要跟着消失，否则会留下一条没人管的轨迹
+      if (this.points.length > 0) this.clearTrail();
       return;
     }
 

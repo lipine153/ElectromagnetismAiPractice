@@ -58,10 +58,14 @@ export function mountPanel(store: SceneStore, host: MenuHost | null, root: Paren
   // ---------- 属性面板 ----------
   let renderedId: string | null = null;
   let titleEl: HTMLElement | null = null;
+  /** 当前属性面板里的控件，用来在「别处改了参数」时同步刷新 */
+  let propsControls: ParamControl[] = [];
+  let propsOnChange: ((params: Record<string, number>) => void) | null = null;
 
   const renderProps = (element: SceneElement): void => {
     propsBody.replaceChildren();
     titleEl = null;
+    propsControls = [];
 
     const head = document.createElement('div');
     head.className = 'props__head';
@@ -80,17 +84,16 @@ export function mountPanel(store: SceneStore, host: MenuHost | null, root: Paren
     propsBody.appendChild(head);
     titleEl = title;
 
-    const controls: ParamControl[] = [];
-    const onChange = linkParamControls(controls);
-    const onParamChange = (params: Record<string, number>): void => {
+    const onChange = linkParamControls(propsControls);
+    propsOnChange = (params) => {
       onChange(params);
       if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
     };
 
     for (const spec of PARAM_SPECS[element.kind] ?? []) {
-      controls.push(createParamControl(store, element, spec, onParamChange));
+      propsControls.push(createParamControl(store, element, spec, propsOnChange));
     }
-    propsBody.append(...controls.map((control) => control.root));
+    propsBody.append(...propsControls.map((control) => control.root));
   };
 
   // ---------- 工作栏 ----------
@@ -162,6 +165,11 @@ export function mountPanel(store: SceneStore, host: MenuHost | null, root: Paren
     if (element.id !== renderedId) {
       renderedId = element.id;
       renderProps(element);
+    } else {
+      // 同一个要素改了参数（可能在右键菜单里改的，也可能被「粒子」预设联动过）：
+      // 属性面板必须跟着刷新，否则两处显示会不一致。只塞值、不重建 DOM，
+      // 所以正在拖的滑条不会被抢掉。
+      propsOnChange?.(element.params);
     }
   });
 }
