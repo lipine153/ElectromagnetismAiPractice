@@ -26,6 +26,18 @@ interface FieldLineModuleInstance {
   ): number;
   /** 单点求场，out = [Ex, Ey, Ez, Bx, By, Bz] */
   _eval_field(x: number, y: number, z: number, outPtr: number): void;
+  /**
+   * 推进自由点电荷一个帧步长（Boris push）。
+   * 返回内部缓冲指针：[count, stopped, (x, y, z) x count]。
+   */
+  _particle_advance(
+    statePtr: number,
+    qOverM: number,
+    dt: number,
+    substeps: number,
+    maxRadius: number,
+    stopRadius: number,
+  ): number;
   getValue(ptr: number, type: string): number;
 }
 

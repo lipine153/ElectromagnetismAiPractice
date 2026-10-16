@@ -65,3 +65,24 @@ void eval_field(double x, double y, double z, double* out6) {
     out6[4] = b.y;
     out6[5] = b.z;
 }
+
+// 推进自由点电荷一个「帧步长」。
+//   state6   就地读写：[x, y, z, vx, vy, vz]
+//   qOverM   q/m (C/kg)
+//   dt       单个子步的物理时长
+// 返回持久缓冲指针：[count, stopped, (x, y, z) x count]（本帧的子步采样点）。
+// 注意：调用后若内存增长，JS 侧需重新获取 HEAPF32 视图。
+extern "C" EMSCRIPTEN_KEEPALIVE
+const float* particle_advance(double* state6, double qOverM, double dt, int substeps,
+                              double maxRadius, double stopRadius) {
+    ParticleState state{Vec3{state6[0], state6[1], state6[2]}, Vec3{state6[3], state6[4], state6[5]}};
+    borisAdvance(state, qOverM, dt, substeps, maxRadius, stopRadius, g_out);
+
+    state6[0] = state.pos.x;
+    state6[1] = state.pos.y;
+    state6[2] = state.pos.z;
+    state6[3] = state.vel.x;
+    state6[4] = state.vel.y;
+    state6[5] = state.vel.z;
+    return g_out.data();
+}

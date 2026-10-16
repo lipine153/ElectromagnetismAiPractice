@@ -29,7 +29,7 @@ target_compile_options(field_line PRIVATE -Wall -Wextra)
 
 # Wasm 导出契约：与 src/physics/wasm.ts 保持一致
 target_link_options(field_line PRIVATE
-    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_set_sources','_trace_lines','_eval_field']"
+    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_set_sources','_trace_lines','_eval_field','_particle_advance']"
     "-sEXPORTED_RUNTIME_METHODS=['getValue']"
     -sALLOW_MEMORY_GROWTH=1
     -sMODULARIZE=1

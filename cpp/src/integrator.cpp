@@ -62,3 +62,52 @@ void traceInto(int field, int sign, const Vec3& seed, double step, int maxSteps,
 
     out[countSlot] = static_cast<float>(count);
 }
+
+void borisStep(ParticleState& state, double qOverM, double dt) {
+    // 半步电场：v⁻ = v + (q/m)E·dt/2
+    const Vec3 accel = evalE(state.pos) * qOverM;
+    // 旋转向量 t = (q/m)B·dt/2，s = 2t/(1+|t|²)
+    const Vec3 t = evalB(state.pos) * (qOverM * dt * 0.5);
+
+    const Vec3 vMinus = state.vel + accel * (0.5 * dt);
+    const Vec3 s = t * (2.0 / (1.0 + t.normSq()));
+    const Vec3 vPrime = vMinus + vMinus.cross(t);      // v⁻ + v⁻×t
+    const Vec3 vPlus = vMinus + vPrime.cross(s);       // 精确旋转后的速度
+    state.vel = vPlus + accel * (0.5 * dt);            // 再补半步电场
+    state.pos += state.vel * dt;
+}
+
+bool borisAdvance(ParticleState& state, double qOverM, double dt, int substeps, double maxRadius,
+                  double stopRadius, std::vector<float>& out) {
+    out.clear();
+    out.push_back(0.0f);  // 点数占位
+    out.push_back(0.0f);  // stopped 占位
+
+    int count = 0;
+    const auto push = [&out, &count](const Vec3& p) {
+        out.push_back(static_cast<float>(p.x));
+        out.push_back(static_cast<float>(p.y));
+        out.push_back(static_cast<float>(p.z));
+        ++count;
+    };
+
+    bool stopped = false;
+    push(state.pos);  // 本帧起点
+    for (int i = 0; i < substeps; ++i) {
+        borisStep(state, qOverM, dt);
+
+        // 飞出计算区域、或钻进点状源里：**停在原地**，别把笔头放到界外/源内
+        if (state.pos.norm() > maxRadius || distanceToNearestPointSource(state.pos) < stopRadius) {
+            state.pos = Vec3{static_cast<double>(out[out.size() - 3]),
+                             static_cast<double>(out[out.size() - 2]),
+                             static_cast<double>(out[out.size() - 1])};
+            stopped = true;
+            break;
+        }
+        push(state.pos);
+    }
+
+    out[0] = static_cast<float>(count);
+    out[1] = stopped ? 1.0f : 0.0f;
+    return stopped;
+}

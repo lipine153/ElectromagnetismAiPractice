@@ -11,7 +11,7 @@ import {
   snapDirectionToAxis,
 } from '../scene/geometry';
 import type { SceneStore } from '../scene/store';
-import type { SceneElement, Vec3, WireTool } from '../scene/types';
+import { readParticleRun, type SceneElement, type Vec3, type WireTool } from '../scene/types';
 import type { Scene3D } from './scene3d';
 import { WireView } from './wireView';
 
@@ -92,6 +92,8 @@ export class ElementViews {
 
   /** 简单要素（点电荷等）：直接用网格 */
   private readonly simpleViews = new Map<string, THREE.Mesh>();
+  /** 自由点电荷的笔头由 ParticleView 独占，这里只借它当 TransformControls 的目标 */
+  private particleTargets: { id: string; object: THREE.Object3D } | null = null;
   /** 螺线管等会随参数变形的要素：记录已构建的尺寸签名 */
   private readonly meshShape = new Map<string, string>();
   /** 折线要素：导线 */
@@ -375,6 +377,14 @@ export class ElementViews {
     this.selectedNode = index;
   }
 
+  /**
+   * 自由点电荷的笔头挂在 ParticleView 上，但「待放开」时它仍要能被移动/旋转。
+   * 这里把笔头交给 TransformControls 当目标（object 为空表示当前没有粒子）。
+   */
+  setParticleTarget(id: string | null, object: THREE.Object3D | null): void {
+    this.particleTargets = id && object ? { id, object } : null;
+  }
+
   /** 与 store 对齐：新建/删除/移动要素，重建导线几何，并同步选中态与手柄 */
   sync(
     elements: readonly SceneElement[],
@@ -396,6 +406,9 @@ export class ElementViews {
         }
         view.update(el, dragging);
         view.setResolution(size.width, size.height);
+      } else if (el.kind === 'freeCharge') {
+        // 视觉（笔头 + 荧光笔拖尾）全在 ParticleView 里，这里不建网格
+        continue;
       } else {
         let mesh = this.simpleViews.get(el.id);
         if (!mesh) {
@@ -462,6 +475,19 @@ export class ElementViews {
         // 平移工具：整体移动整条导线（多段导线与圆环都适用）
         this.attach('translate', view.translateProxy, element.id);
       }
+      return;
+    }
+
+    // 自由点电荷：笔头归 ParticleView，只有「待放开」时才挂 gizmo（飞行中拖动=瞬移）
+    if (element.kind === 'freeCharge') {
+      const held = readParticleRun(element.params.run) === 'held';
+      const target =
+        held && this.particleTargets?.id === element.id ? this.particleTargets.object : null;
+      if (!target) {
+        this.transform.detach();
+        return;
+      }
+      this.attach(wireTool === 'rotate' ? 'rotate' : 'simple', target, element.id);
       return;
     }
 

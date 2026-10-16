@@ -2,7 +2,7 @@ import { PALETTE, PARAM_SPECS, createElement, defaultPosition, elementColor, ele
 import type { SceneStore } from '../scene/store';
 import type { SceneElement } from '../scene/types';
 import type { MenuHost } from './contextMenu';
-import { createParamControl } from './params';
+import { createParamControl, linkParamControls, type ParamControl } from './params';
 
 function byId<T extends HTMLElement>(root: ParentNode, id: string): T | null {
   return root.querySelector<T>(`#${id}`);
@@ -80,13 +80,17 @@ export function mountPanel(store: SceneStore, host: MenuHost | null, root: Paren
     propsBody.appendChild(head);
     titleEl = title;
 
+    const controls: ParamControl[] = [];
+    const onChange = linkParamControls(controls);
+    const onParamChange = (params: Record<string, number>): void => {
+      onChange(params);
+      if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
+    };
+
     for (const spec of PARAM_SPECS[element.kind] ?? []) {
-      propsBody.appendChild(
-        createParamControl(store, element, spec, (params) => {
-          if (titleEl) titleEl.textContent = elementLabel(element.kind, params);
-        }),
-      );
+      controls.push(createParamControl(store, element, spec, onParamChange));
     }
+    propsBody.append(...controls.map((control) => control.root));
   };
 
   // ---------- 工作栏 ----------

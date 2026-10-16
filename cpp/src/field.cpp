@@ -163,6 +163,19 @@ Vec3 evalB(const Vec3& pos) {
     return b;
 }
 
+// 到最近「点状」源的距离：只认点电荷和偶极子。
+// 圆环（含螺线管展开）和导线的 pos 只是圆心 / 段起点，不是碰撞体——
+// 否则自由电荷一进螺线管内部就会被判成撞墙。
+double distanceToNearestPointSource(const Vec3& pos) {
+    double best = 1e300;
+    for (const Source& s : g_sources) {
+        if (s.kind != kCharge && s.kind != kDipole) continue;
+        const double d = (pos - s.pos).norm();
+        if (d < best) best = d;
+    }
+    return best;
+}
+
 double distanceToNearestSource(const Vec3& pos) {
     double best = 1e300;
     for (const Source& s : g_sources) {

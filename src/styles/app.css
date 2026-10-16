@@ -18,6 +18,11 @@
   --color-fg: #e6ecf7;
   --color-muted: #93a0bd;
 
+  /* 荧光笔轨迹：由外到内三层，一层比一层亮的绿 */
+  --color-trail-glow: #15803d;
+  --color-trail: #4ade80;
+  --color-trail-core: #d9fbe5;
+
   --font-sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
 
   --radius-card: 1rem;
@@ -731,6 +736,31 @@
   }
   .param--toggle .param__name {
     flex: 1;
+  }
+
+  /* 选择型参数（粒子类型 / 电性）：一排小按钮 */
+  .param__choices {
+    display: flex;
+    flex: none;
+    gap: 0.25rem;
+  }
+  .param__choice {
+    padding: 0.16rem 0.45rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .param__choice:hover {
+    border-color: var(--color-accent);
+  }
+  .param__choice.is-active {
+    border-color: var(--color-accent);
+    background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+    color: var(--color-fg);
   }
   .param__input--toggle {
     appearance: none;

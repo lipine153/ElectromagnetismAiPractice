@@ -20,3 +20,8 @@ Vec3 evalB(const Vec3& pos);
 
 // 到最近场源的距离（追踪时用于在源附近收线，避免绕圈）
 double distanceToNearestSource(const Vec3& pos);
+
+// 到最近「点状」场源（点电荷 / 偶极子）的距离。
+// 圆电流环的 pos 是**圆心**、直导线的 pos 是**段起点**，把它们当碰撞距离会把
+// 「从螺线管内部穿过」误判成撞墙，所以自由电荷的碰撞判定只能用它。
+double distanceToNearestPointSource(const Vec3& pos);

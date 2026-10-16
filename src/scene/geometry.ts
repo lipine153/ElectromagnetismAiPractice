@@ -172,7 +172,8 @@ export function solenoidLoops(element: SceneElement): LoopSource[] {
 /** 该要素是否需要「移动/旋转」工具切换（即它的姿态有意义） */
 export function isRotatableElement(element: SceneElement): boolean {
   if (element.kind === 'straightWire') return isTwoNodeCircle(element);
-  return element.kind === 'solenoid' || element.kind === 'dipole';
+  // 自由电荷：旋转工具用来瞄初速度方向
+  return element.kind === 'solenoid' || element.kind === 'dipole' || element.kind === 'freeCharge';
 }
 
 export function wireNodes(element: SceneElement): Vec3[] {

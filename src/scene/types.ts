@@ -18,7 +18,26 @@ export const SOURCE_KIND = {
   capacitor: 6,
 } as const;
 
-export type ElementKind = keyof typeof SOURCE_KIND;
+export type ElementKind = keyof typeof SOURCE_KIND | 'freeCharge';
+
+/**
+ * 自由点电荷（有质量的试探电荷）的运行态。
+ * 它**不是场源**：只感受 E/B，不参与 _set_sources，所以移动它不会触发场线重算。
+ */
+export type ParticleRun = 'held' | 'running' | 'stopped';
+
+/** 存进 params 的编码（params 只能放数字） */
+export const PARTICLE_RUN_CODE: Readonly<Record<ParticleRun, number>> = {
+  held: 0,
+  running: 1,
+  stopped: 2,
+};
+
+export function readParticleRun(code: number | undefined): ParticleRun {
+  if (code === PARTICLE_RUN_CODE.running) return 'running';
+  if (code === PARTICLE_RUN_CODE.stopped) return 'stopped';
+  return 'held';
+}
 
 /** 每个场源上传到 Wasm 时占 12 个 double（见 cpp/include/source.hpp） */
 export const SOURCE_STRIDE = 12;

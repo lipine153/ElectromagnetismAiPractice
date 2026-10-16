@@ -34,7 +34,8 @@ pwsh -File scripts/build.ps1   # rebuild C++ -> public/bin/field_line.js
     `ops.ts` (node add/remove).
   - `src/physics/` — `wasm.ts` (the ONLY place that talks to Wasm), `seeds.ts` (seed points).
   - `src/render/` — `scene3d.ts`, `elements3d.ts` (meshes + TransformControls),
-    `wireView.ts` (conductor + node handles + current arrows), `fieldLines.ts`, `colors.ts`.
+    `wireView.ts` (conductor + node handles + current arrows), `fieldLines.ts`,
+    `particleView.ts` (自由点电荷笔头 + 荧光笔拖尾), `colors.ts`.
   - `src/ui/` — `toolbar.ts`, `panel.ts` (two tabs), `contextMenu.ts` (menu host),
     `elementMenu.ts` (shared menu content), `params.ts` (shared slider control).
 - `src/game/`, `src/models/` — quiz logic and its inline SVG diagrams.
@@ -113,6 +114,48 @@ Field-line gotchas (each of these was got wrong once already):
   would require a `color` attribute that `ConeGeometry` does not have. The top-bar toggle just
   flips `SceneStore.showArrows` → `FieldLines.setArrowsVisible()` (no retrace needed).
 
+## 自由点电荷（有质量的试探电荷）
+A `freeCharge` element integrates `m·dv/dt = q(E + v·B)` in **C++** (`cpp/src/integrator.cpp`)
+and draws a highlighter-green trail. The load-bearing decisions:
+
+- **Boris push, not RK4.** RK4 makes the gyro-radius drift systematically (the orbit spirals
+  in/out); Boris rotates the velocity *exactly* in the magnetic half-step, so `|v|` is conserved
+  to machine precision under pure B (measured: 9e-15 over 100 orbits) and it is still 2nd order.
+- **It is a test particle, so it must be excluded everywhere a source is assumed.** It is a real
+  `ElementKind` (that is what gives it a 工作栏 row + the shared menu for free), but four places
+  skip it: `wasm.ts upload` (not a source), `seeds.ts` (both builders), and
+  `elements3d.createMesh/sync` (the visuals belong to `ParticleView`). Miss one and it either
+  becomes a field source or grows a duplicate sphere.
+- **Live state (pos/vel/trail) never enters the store.** Only config (`sign/qMag/m/v0/timeScale`)
+  and the run state (`params.run`) live in `params`. If the position went through the store it
+  would fire `retraceDirty` and rebuild every wire's LineGeometry at 60fps.
+- **`distanceToNearestPointSource` is what the collision test must use** — `distanceToNearestSource`
+  would treat a `kCurrentLoop`'s *centre* (and a wire's *segment start*) as solid, so a particle
+  flying down a solenoid's bore would immediately "hit" the source.
+- **Auto time-scale.** E-dominated and B-dominated scenes need frame steps three orders of
+  magnitude apart, so a fixed `dt` is always wrong for one of them: at 放开 the code calibrates
+  `physicalPerSecond` so one characteristic time (gyro period / E crossing / straight-line
+  crossing, whichever is smallest) takes ≈2 s, then picks substeps from the *current* `|B|` and
+  `|v|` (≤0.08 rad of gyration and ≤2% of the scene per substep, capped at 256).
+- **Placement is two-phase**: place it like a point charge (spawns under the cursor, *held* and
+  stationary), aim with the existing 移动/旋转 tools (its `direction` is v₀, and the preview
+  arrow's length tracks `log10(v0)` so magnitude is visible too), then 放开 in the 工作 menu.
+  Dragging is only allowed while held — dragging a flying particle would teleport it.
+- **重置 must also clear the trail.** The trail is one polyline, so teleporting the head back to
+  the start would draw a line across the scene that looks like a real teleport. 重置 bumps
+  `params.trailSeq` (= clear) *and* sets `run=0`; 清除轨迹 only bumps the seq.
+
+### Trail rendering: instanced cylinders, **not** Line2
+The 3-layer glow stack (halo/body/core, additive, `depthTest:false` so it reads as a marker
+drawn on top — which also fixes the trail z-fighting the ground grid, since an orbit can lie
+exactly in the y=0 plane) is drawn with an `InstancedMesh` of unit cylinders, one instance per
+segment (scaled to the segment length, colour faded toward the tail). **Do not "simplify" this
+to `Line2`/`LineMaterial`:** that was the first implementation and it silently drew only ~1
+segment (the geometry, `instanceCount` and materials all reported correct), which took a long
+time to chase; the same instanced path the field-line arrows use works. Testing note: inside a
+solenoid the trail is genuinely occluded by the coil from any shallow angle — orbit the camera
+to look **down the bore** before concluding it is broken.
+
 ## Sandbox UI conventions (keep this feel — don't drift)
 The sandbox stays **minimal**: full-screen scene, one slim top bar, one collapsible left
 drawer. No permanent side panels, no wall of buttons ("中药铺"). If a new control affects the
@@ -140,7 +183,11 @@ dispatches on.
   append into an existing wire.
 - **Edit in place.** Parameter sliders live both in the context menu and in the properties panel
   — always reuse `createParamControl` (`src/ui/params.ts`) rather than hand-rolling a slider, so
-  the value renders as LaTeX and stays in sync with the panel/title.
+  the value renders as LaTeX and stays in sync with the panel/title. `ParamSpec.type` covers
+  `range` / `log` (log10 slider, `min`/`max` are real values) / `toggle` / `choice` (a row of
+  buttons each writing a *set* of params — that is how 「质子」 sets q and m at once). Any control
+  that writes more than its own key must be paired with `linkParamControls`, or sibling controls
+  (and any `choice` highlight) keep showing stale values.
 - **Numbers are typeset, not printed.** User-facing physical quantities render via KaTeX
   (`texValue` → `1.00\times10^{-9}\ \text{C}`), never `1.0e-9`.
 - **Adding an element kind** = a `PALETTE` entry + `PARAM_SPECS` in `src/scene/catalog.ts`, a
@@ -162,7 +209,7 @@ dispatches on.
 - **Seed encoding** for `_trace_lines`: flat `double[]`, stride 4 = `[x, y, z, sign]`
   (`sign < 0` traces against the field, used to draw lines arriving at negative charges).
 - **Exports** (set in `CMakeLists.txt`): `_malloc`, `_free`, `_set_sources`, `_trace_lines`,
-  `_eval_field`; runtime method `getValue`; module global `FieldLineModule`.
+  `_eval_field`, `_particle_advance`; runtime method `getValue`; module global `FieldLineModule`.
 - `_trace_lines(...)` returns a pointer to a **persistent internal buffer** (reused every
   call — do not free it). Layout: `[count, (x,y,z,|F|) x count]` per seed, concatenated.
 - **After any call that may grow memory you must re-read `module.HEAPF32` / `HEAPF64`** —

@@ -37,11 +37,11 @@ function packParams(el: SceneElement): [number, number] {
       return [el.params.i ?? 0, el.params.turnsPerLength ?? 0];
     case 'dipole':
       return [el.params.m ?? 0, 0];
-    case 'solenoid':
-      // 螺线管在 TS 侧展开成圆环，这里不会用到，保留以穷尽类型
-      return [el.params.i ?? 0, el.params.radius ?? 0];
     case 'capacitor':
       return [el.params.q ?? 0, el.params.dqdt ?? 0];
+    case 'freeCharge':
+      // 试探电荷不是场源，upload 里已跳过；这里只是让 switch 穷尽类型
+      return [0, 0];
   }
 }
 
@@ -59,12 +59,14 @@ export class FieldEngine {
   private readonly sourcePtr: number;
   private readonly seedPtr: number;
   private readonly evalPtr: number;
+  private readonly particlePtr: number;
 
   private constructor(module: FieldLineModuleInstance) {
     this.module = module;
     this.sourcePtr = module._malloc(MAX_SOURCES * SOURCE_STRIDE * 8);
     this.seedPtr = module._malloc(MAX_SEEDS * 4 * 8);
     this.evalPtr = module._malloc(6 * 8);
+    this.particlePtr = module._malloc(6 * 8);
   }
 
   static async load(): Promise<FieldEngine> {
@@ -102,6 +104,8 @@ export class FieldEngine {
     };
 
     for (const el of elements) {
+      // 自由点电荷是**试探电荷**：只感受场，不参与 _set_sources
+      if (el.kind === 'freeCharge') continue;
       if (el.kind === 'straightWire') {
         // 折线 → 多段直线（含圆离散、闭合段、两端无穷延伸）
         const current = el.params.i ?? 0;
@@ -180,4 +184,48 @@ export class FieldEngine {
       b: { x: out[3], y: out[4], z: out[5] },
     };
   }
+
+  /**
+   * 推进自由点电荷一个「帧步长」（Boris push，内部再分 substeps 个子步）。
+   * 就地更新 state，并返回本帧的子步采样点供拖尾折线使用。
+   */
+  advanceParticle(
+    state: { pos: Vec3; vel: Vec3 },
+    qOverM: number,
+    dt: number,
+    substeps: number,
+    maxRadius: number,
+    stopRadius: number,
+  ): ParticleStep {
+    const view = new Float64Array(this.module.HEAPF64.buffer, this.particlePtr, 6);
+    view.set([state.pos.x, state.pos.y, state.pos.z, state.vel.x, state.vel.y, state.vel.z]);
+
+    const resPtr = this.module._particle_advance(
+      this.particlePtr,
+      qOverM,
+      dt,
+      substeps,
+      maxRadius,
+      stopRadius,
+    );
+
+    // 调用可能触发内存增长 -> 视图必须重新获取
+    const out = new Float32Array(this.module.HEAPF32.buffer, resPtr);
+    const count = out[0] | 0;
+    const stopped = out[1] !== 0;
+    const samples = new Float32Array(count * 3);
+    for (let i = 0; i < count * 3; i += 1) samples[i] = out[2 + i];
+
+    const back = new Float64Array(this.module.HEAPF64.buffer, this.particlePtr, 6);
+    state.pos = { x: back[0], y: back[1], z: back[2] };
+    state.vel = { x: back[3], y: back[4], z: back[5] };
+    return { samples, count, stopped };
+  }
+}
+
+export interface ParticleStep {
+  /** 扁平 xyz 采样点（本帧走出来的那一段） */
+  samples: Float32Array;
+  count: number;
+  stopped: boolean;
 }
