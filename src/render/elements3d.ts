@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 import { elementColor } from '../scene/catalog';
-import { isTwoNodeCircle } from '../scene/geometry';
+import { isTwoNodeCircle, projectOntoAxis, snapDirectionToAxis } from '../scene/geometry';
 import type { SceneStore } from '../scene/store';
 import type { SceneElement, Vec3, WireTool } from '../scene/types';
 import type { Scene3D } from './scene3d';
@@ -109,7 +109,21 @@ export class ElementViews {
       if (this.dragKind === 'node') {
         const index = object.userData.node as number;
         const nodes = [...(element.nodes ?? [])];
-        nodes[index] = { x: object.position.x, y: object.position.y, z: object.position.z };
+        const raw = { x: object.position.x, y: object.position.y, z: object.position.z };
+
+        // 与相邻节点的连线接近某个坐标轴时吸附，使这一段严格轴对齐
+        const neighbor = nodes[index > 0 ? index - 1 : index + 1];
+        let next = raw;
+        if (neighbor) {
+          const axis = snapDirectionToAxis({
+            x: raw.x - neighbor.x,
+            y: raw.y - neighbor.y,
+            z: raw.z - neighbor.z,
+          });
+          if (axis) next = projectOntoAxis(raw, neighbor, axis);
+        }
+
+        nodes[index] = next;
         store.updateElement(id as string, { nodes });
         return;
       }
@@ -133,9 +147,9 @@ export class ElementViews {
       if (this.dragKind === 'rotate') {
         // 只改圆所在平面的法向；直径（两个节点）保持不动
         const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(object.quaternion);
-        store.updateElement(id as string, {
-          direction: { x: normal.x, y: normal.y, z: normal.z },
-        });
+        const raw = { x: normal.x, y: normal.y, z: normal.z };
+        // 法向接近某个坐标轴时吸附：圆面即与对应坐标平面垂直
+        store.updateElement(id as string, { direction: snapDirectionToAxis(raw) ?? raw });
         return;
       }
 

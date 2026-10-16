@@ -39,6 +39,45 @@ export function isClosedWire(element: SceneElement): boolean {
   return (element.params.closed ?? 0) > 0.5;
 }
 
+/** 六个坐标轴方向 */
+const AXIS_DIRECTIONS: Vec3[] = [
+  { x: 1, y: 0, z: 0 },
+  { x: -1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  { x: 0, y: -1, z: 0 },
+  { x: 0, y: 0, z: 1 },
+  { x: 0, y: 0, z: -1 },
+];
+
+/**
+ * 方向接近某个坐标轴时吸附过去，否则返回 null。
+ *
+ * 「导线垂直于 xOy 平面」= 导线方向平行于 z 轴，所以轴吸附正好覆盖
+ * 「垂直于三个坐标平面」这几种姿态；圆环那边吸的是它的法向（法向沿轴 ⟺ 圆面垂直于对应轴）。
+ */
+export function snapDirectionToAxis(direction: Vec3, maxAngleDeg = 12): Vec3 | null {
+  const unit = normalize(direction);
+  if (norm(unit) < 1e-9) return null;
+
+  const cosLimit = Math.cos((maxAngleDeg * Math.PI) / 180);
+  let best: Vec3 | null = null;
+  let bestDot = cosLimit;
+  for (const axis of AXIS_DIRECTIONS) {
+    const alignment = dot(unit, axis);
+    if (alignment > bestDot) {
+      bestDot = alignment;
+      best = axis;
+    }
+  }
+  return best ? { ...best } : null;
+}
+
+/** 把点投影到「过 origin 沿 axis」的直线上（保持在该轴上滑动，不偏离） */
+export function projectOntoAxis(point: Vec3, origin: Vec3, axis: Vec3): Vec3 {
+  const offset = sub(point, origin);
+  return add(origin, scale(axis, dot(offset, axis)));
+}
+
 export function wireNodes(element: SceneElement): Vec3[] {
   return element.nodes ?? [];
 }
