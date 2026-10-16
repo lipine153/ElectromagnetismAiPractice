@@ -1,16 +1,65 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { elementColor } from '../scene/catalog';
-import { isTwoNodeCircle, projectOntoAxis, snapDirectionToAxis } from '../scene/geometry';
+import {
+  isRotatableElement,
+  isTwoNodeCircle,
+  projectOntoAxis,
+  rotateLoop,
+  snapDirectionToAxis,
+} from '../scene/geometry';
 import type { SceneStore } from '../scene/store';
 import type { SceneElement, Vec3, WireTool } from '../scene/types';
 import type { Scene3D } from './scene3d';
 import { WireView } from './wireView';
 
 const SPHERE_RADIUS = 0.12;
+const DIPOLE_LENGTH = 1.3;
 const VELOCITY_SMOOTHING = 0.35;
 const CLICK_SLOP_PX = 4;
+const SOLENOID_TUBE_RADIUS = 0.035;
+const UP_AXIS = new THREE.Vector3(0, 1, 0);
+
+/** 磁偶极子外形：一根指示磁矩方向的箭头（局部 +Y，再由四元数对齐到磁矩方向） */
+function buildDipoleGeometry(): THREE.BufferGeometry {
+  const headLength = 0.38;
+  const shaftLength = DIPOLE_LENGTH - headLength;
+
+  const shaft = new THREE.CylinderGeometry(0.055, 0.055, shaftLength, 12);
+  shaft.translate(0, -headLength / 2, 0);
+  const head = new THREE.ConeGeometry(0.13, headLength, 16);
+  head.translate(0, (DIPOLE_LENGTH - headLength) / 2, 0);
+
+  return mergeGeometries([shaft, head]);
+}
+
+/** 磁矩方向 = direction × sign(m)：m 取负时箭头要指到反方向，否则和实际场不一致 */
+function dipoleMomentAxis(el: SceneElement, target: THREE.Vector3): THREE.Vector3 {
+  const sign = (el.params.m ?? 0) < 0 ? -1 : 1;
+  target.set(el.direction.x, el.direction.y, el.direction.z).multiplyScalar(sign);
+  return target.lengthSq() > 1e-18 ? target.normalize() : target;
+}
+
+/** 螺线管外形：一条沿局部 +Y 的螺旋线（再用网格四元数对齐到 direction） */
+function buildSolenoidGeometry(element: SceneElement): THREE.BufferGeometry {
+  const radius = element.params.radius ?? 0.5;
+  const length = element.params.length ?? 2;
+  const turns = Math.max(2, Math.min(40, Math.round((element.params.n ?? 500) * length)));
+  const stepsPerTurn = 10;
+  const total = turns * stepsPerTurn;
+
+  const points: THREE.Vector3[] = [];
+  for (let k = 0; k <= total; k += 1) {
+    const t = k / total;
+    const angle = t * turns * Math.PI * 2;
+    points.push(
+      new THREE.Vector3(radius * Math.cos(angle), (t - 0.5) * length, radius * Math.sin(angle)),
+    );
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), total, SOLENOID_TUBE_RADIUS, 5, false);
+}
 
 /** 拾取结果：命中的要素、命中的节点下标（导线才有）、命中点 */
 export interface ElementPick {
@@ -43,6 +92,8 @@ export class ElementViews {
 
   /** 简单要素（点电荷等）：直接用网格 */
   private readonly simpleViews = new Map<string, THREE.Mesh>();
+  /** 螺线管等会随参数变形的要素：记录已构建的尺寸签名 */
+  private readonly meshShape = new Map<string, string>();
   /** 折线要素：导线 */
   private readonly wireViews = new Map<string, WireView>();
 
@@ -50,6 +101,10 @@ export class ElementViews {
   private dragKind: DragKind = 'none';
   private draggingId: string | null = null;
   private dragBase: Vec3[] = [];
+  /** 「绕圆心旋转」用：拖拽开始时的姿态、节点与法向快照（圆心由节点快照推出） */
+  private readonly rotateStartQuat = new THREE.Quaternion();
+  private rotateBaseNodes: Vec3[] = [];
+  private rotateBaseDir: Vec3 = { x: 0, y: 1, z: 0 };
   private readonly dragOffset = new THREE.Vector3();
   private readonly lastProxy = new THREE.Vector3();
   private readonly lastPos = new THREE.Vector3();
@@ -80,6 +135,13 @@ export class ElementViews {
         this.lastProxy.copy(transform.object?.position ?? new THREE.Vector3());
         this.lastPos.copy(transform.object?.position ?? new THREE.Vector3());
         this.lastTime = performance.now();
+
+        // 旋转：记下起始姿态与节点快照，之后一律按「相对起点的旋转量」整体算，避免逐帧累积漂移
+        if (this.dragKind === 'rotate' && transform.object) {
+          this.rotateStartQuat.copy(transform.object.quaternion);
+          this.rotateBaseNodes = (element?.nodes ?? []).map((n) => ({ ...n }));
+          this.rotateBaseDir = { ...(element?.direction ?? { x: 0, y: 1, z: 0 }) };
+        }
       } else {
         const id = this.draggingId;
         // 松手：把代理挪到新的形心，并清零速度（避免残留的 v×B 项）
@@ -145,10 +207,36 @@ export class ElementViews {
       }
 
       if (this.dragKind === 'rotate') {
-        // 只改圆所在平面的法向；直径（两个节点）保持不动
+        // TransformControls 在世界空间是**左乘**：q = Δ · q₀，所以 Δ = q · q₀⁻¹
+        const delta = object.quaternion
+          .clone()
+          .multiply(this.rotateStartQuat.clone().invert())
+          .normalize();
+
+        if (element.kind === 'straightWire' && isTwoNodeCircle(element)) {
+          // 圆环：绕**圆心**整体刚性旋转（几何在 geometry.rotateLoop）
+          const rotated = rotateLoop(this.rotateBaseNodes, this.rotateBaseDir, [
+            delta.w,
+            delta.x,
+            delta.y,
+            delta.z,
+          ]);
+          if (rotated) {
+            store.updateElement(id as string, {
+              nodes: rotated.nodes,
+              direction: rotated.direction,
+              position: rotated.nodes[0],
+            });
+            return;
+          }
+        }
+
+        // 偶极子 / 螺线管：只改朝向，位置不动
         const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(object.quaternion);
+        // 偶极子的网格朝向 = direction × sign(m)，换回 direction 要再乘一次 sign
+        if (element.kind === 'dipole' && (element.params.m ?? 0) < 0) normal.negate();
         const raw = { x: normal.x, y: normal.y, z: normal.z };
-        // 法向接近某个坐标轴时吸附：圆面即与对应坐标平面垂直
+        // 接近某个坐标轴时吸附
         store.updateElement(id as string, { direction: snapDirectionToAxis(raw) ?? raw });
         return;
       }
@@ -306,7 +394,7 @@ export class ElementViews {
           this.wireViews.set(el.id, view);
           this.scene.add(view.root);
         }
-        view.update(el);
+        view.update(el, dragging);
         view.setResolution(size.width, size.height);
       } else {
         let mesh = this.simpleViews.get(el.id);
@@ -316,6 +404,7 @@ export class ElementViews {
           this.scene.add(mesh);
         }
         this.applyAppearance(mesh, el);
+        this.updateMeshShape(mesh, el);
         if (!dragging) mesh.position.set(el.position.x, el.position.y, el.position.z);
       }
     }
@@ -377,13 +466,25 @@ export class ElementViews {
     }
 
     const mesh = this.simpleViews.get(element.id);
-    if (mesh) this.attach('simple', mesh, element.id);
-    else this.transform.detach();
+    if (!mesh) {
+      this.transform.detach();
+      return;
+    }
+    if (wireTool === 'rotate' && isRotatableElement(element)) {
+      // 偶极子 / 螺线管：直接对整个网格做旋转，读它的四元数写回 direction
+      this.attach('rotate', mesh, element.id);
+    } else {
+      this.attach('simple', mesh, element.id);
+    }
   }
 
   private attach(kind: DragKind, object: THREE.Object3D, id: string): void {
+    // 模式必须**每次**同步：导线在「移动/旋转」下挂的是两个不同的代理对象，
+    // 但偶极子这类简单要素两种模式挂的是同一个网格——只认「对象变了没有」会让旋转
+    // 工具永远切不过去（手柄还是平移箭头）。
+    const mode = kind === 'rotate' ? 'rotate' : 'translate';
+    if (this.transform.mode !== mode) this.transform.mode = mode;
     if (this.transform.object !== object) {
-      this.transform.mode = kind === 'rotate' ? 'rotate' : 'translate';
       this.transform.attach(object);
     }
     this.dragKind = kind;
@@ -391,13 +492,39 @@ export class ElementViews {
   }
 
   private createMesh(el: SceneElement): THREE.Mesh {
+    const geometry =
+      el.kind === 'solenoid'
+        ? buildSolenoidGeometry(el)
+        : el.kind === 'dipole'
+          ? buildDipoleGeometry()
+          : new THREE.SphereGeometry(SPHERE_RADIUS, 24, 16);
+
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(SPHERE_RADIUS, 24, 16),
+      geometry,
       new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 }),
     );
     mesh.userData.id = el.id;
     mesh.position.set(el.position.x, el.position.y, el.position.z);
     return mesh;
+  }
+
+  /** 外形随参数变化时需要重建（目前只有螺线管）；顺带同步朝向 */
+  private updateMeshShape(mesh: THREE.Mesh, el: SceneElement): void {
+    if (el.kind === 'solenoid') {
+      const signature = `${el.params.n ?? 0}|${el.params.radius ?? 0}|${el.params.length ?? 0}`;
+      if (this.meshShape.get(el.id) !== signature) {
+        this.meshShape.set(el.id, signature);
+        mesh.geometry.dispose();
+        mesh.geometry = buildSolenoidGeometry(el);
+      }
+    }
+    if (el.kind === 'solenoid' || el.kind === 'dipole') {
+      const axis =
+        el.kind === 'dipole'
+          ? dipoleMomentAxis(el, new THREE.Vector3())
+          : new THREE.Vector3(el.direction.x, el.direction.y, el.direction.z);
+      if (axis.lengthSq() > 1e-9) mesh.quaternion.setFromUnitVectors(UP_AXIS, axis.normalize());
+    }
   }
 
   private applyAppearance(mesh: THREE.Mesh, el: SceneElement): void {

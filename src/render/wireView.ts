@@ -95,7 +95,7 @@ export class WireView {
   }
 
   /** 用最新的要素数据重建几何 */
-  update(element: SceneElement): void {
+  update(element: SceneElement, dragging = false): void {
     const { points, closed } = wireCenterline(element);
     const world = points.map(toVec);
 
@@ -128,7 +128,7 @@ export class WireView {
     // 闭合圆环的中心线有 33 个点，但真正的节点只有 2 个（直径两端）。
     this.updateHandles((element.nodes ?? []).map(toVec), element.id);
     this.updateArrows(world, closed);
-    this.updateProxies(element, world, closed);
+    this.updateProxies(element, world, closed, dragging);
   }
 
   private setLine(line: Line2, from: THREE.Vector3, dir: THREE.Vector3): void {
@@ -184,22 +184,37 @@ export class WireView {
     this.arrows.instanceMatrix.needsUpdate = true;
   }
 
-  private updateProxies(element: SceneElement, world: THREE.Vector3[], closed: boolean): void {
+  private updateProxies(
+    element: SceneElement,
+    world: THREE.Vector3[],
+    closed: boolean,
+    dragging: boolean,
+  ): void {
     const centroid = new THREE.Vector3();
     for (const p of world) centroid.add(p);
     if (world.length > 0) centroid.divideScalar(world.length);
-    this.translateProxy.position.copy(centroid);
+
+    // 拖拽中不要回写代理：变换正由 TransformControls 驱动，回写会和它打架
+    if (!dragging) this.translateProxy.position.copy(centroid);
 
     // 旋转代理只在「两节点闭合的圆」上有意义：圆心 + 法向姿态
     this.rotateProxy.visible = closed && world.length >= 2;
-    if (this.rotateProxy.visible) {
-      this.rotateProxy.position.copy(world[0]).add(world[1]).multiplyScalar(0.5);
-      this.normal.set(element.direction.x, element.direction.y, element.direction.z);
-      if (this.normal.lengthSq() < 1e-9) this.normal.copy(UP);
-      this.normal.normalize();
-      this.quaternion.setFromUnitVectors(UP, this.normal);
-      this.rotateProxy.quaternion.copy(this.quaternion);
+    if (!this.rotateProxy.visible || dragging) return;
+
+    // 圆心 = 两节点中点。**不能用 world[0]/world[1]**：那是圆上相邻的两个离散点
+    // （相差 11.25°），它们的中点落在圆周上，旋转手柄就跑偏到边缘去了。
+    const nodes = element.nodes ?? [];
+    if (nodes.length === 2) {
+      this.rotateProxy.position.copy(toVec(nodes[0])).add(toVec(nodes[1])).multiplyScalar(0.5);
+    } else {
+      this.rotateProxy.position.copy(centroid);
     }
+
+    this.normal.set(element.direction.x, element.direction.y, element.direction.z);
+    if (this.normal.lengthSq() < 1e-9) this.normal.copy(UP);
+    this.normal.normalize();
+    this.quaternion.setFromUnitVectors(UP, this.normal);
+    this.rotateProxy.quaternion.copy(this.quaternion);
   }
 
   dispose(): void {

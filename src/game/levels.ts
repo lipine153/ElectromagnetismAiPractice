@@ -21,6 +21,24 @@ export interface Level {
   /** 槽位下标 -> 正确数值字符串 */
   readonly answer: Readonly<Record<number, string>>;
   readonly model: ModelKind;
+  /**
+   * 沙盒深链：本关对应的场景预设 + 该关的数值。
+   * 球壳/介质那几关沙盒表示不了（只有点电荷、导线、螺线管、偶极子），所以留空、不给按钮。
+   */
+  readonly sandbox?: SandboxTarget;
+}
+
+export interface SandboxTarget {
+  /** 对应 `src/scene/presets.ts` 里的预设 id */
+  readonly preset: string;
+  readonly params: Readonly<Record<string, number>>;
+}
+
+/** 拼出沙盒深链地址；参数即该关的物理量，沙盒那边按同名参数覆盖预设默认值 */
+export function sandboxHref(target: SandboxTarget): string {
+  const query = new URLSearchParams({ p: target.preset });
+  for (const [key, value] of Object.entries(target.params)) query.set(key, String(value));
+  return `./index.html#${query.toString()}`;
 }
 
 export const levels: readonly Level[] = [
@@ -91,6 +109,7 @@ export const levels: readonly Level[] = [
     areaNames: ['导线外磁感应强度 \\(B\\)'],
     answer: { 0: '1e-5' },
     model: 'wire',
+    sandbox: { preset: 'long-wire', params: { i: 10 } },
   },
   {
     title: '第6关 螺线管匀强磁场',
@@ -104,6 +123,7 @@ export const levels: readonly Level[] = [
     areaNames: ['螺线管内部磁感应强度 \\(B\\)'],
     answer: { 0: '1.256e-3' },
     model: 'solenoid',
+    sandbox: { preset: 'solenoid', params: { n: 500, i: 2 } },
   },
   {
     title: '第7关 线圈自感 L',
@@ -117,6 +137,7 @@ export const levels: readonly Level[] = [
     areaNames: ['自感系数 \\(L\\)'],
     answer: { 0: '0.01' },
     model: 'coil',
+    sandbox: { preset: 'current-loop', params: { i: 0.4 } },
   },
   {
     title: '第8关 自感电动势',

@@ -78,6 +78,103 @@ export function projectOntoAxis(point: Vec3, origin: Vec3, axis: Vec3): Vec3 {
   return add(origin, scale(axis, dot(offset, axis)));
 }
 
+/** 四元数 (w,x,y,z) 旋转向量（与 three 的 applyQuaternion 同约定） */
+export function applyQuat(v: Vec3, q: readonly [number, number, number, number]): Vec3 {
+  const [w, qx, qy, qz] = q;
+  const tx = 2 * (qy * v.z - qz * v.y);
+  const ty = 2 * (qz * v.x - qx * v.z);
+  const tz = 2 * (qx * v.y - qy * v.x);
+  return {
+    x: v.x + w * tx + (qy * tz - qz * ty),
+    y: v.y + w * ty + (qz * tx - qx * tz),
+    z: v.z + w * tz + (qx * ty - qy * tx),
+  };
+}
+
+/**
+ * 圆环绕**圆心**的整体刚性旋转 —— 「绕圆心旋转」的全部几何都在这里。
+ *
+ * 圆心不动，直径两端与法向一起转；只改法向的话圆环就变成绕直径转动（被两个节点钉住），
+ * 而且绕法向自转时法向不变、圆环会完全不响应。
+ *
+ * `quat` 是**相对拖拽起点**的旋转量 Δ（TransformControls 在世界空间是左乘 q = Δ·q₀，
+ * 所以 Δ = q·q₀⁻¹）；`nodes` / `direction` 传拖拽起点的快照，每帧都从起点重算，不逐帧累积。
+ * 法向接近坐标轴时吸附过去，此时把直径投影回垂面，保持「法向 ⟂ 直径」这个不变式。
+ */
+export function rotateLoop(
+  nodes: readonly Vec3[],
+  direction: Vec3,
+  quat: readonly [number, number, number, number],
+  maxSnapAngleDeg = 12,
+): { nodes: [Vec3, Vec3]; direction: Vec3 } | null {
+  if (nodes.length !== 2) return null;
+  const center = scale(add(nodes[0], nodes[1]), 0.5);
+  const half0 = scale(sub(nodes[1], nodes[0]), 0.5);
+  const radius = norm(half0);
+  if (radius < 1e-9) return null;
+
+  const normalRaw = normalize(applyQuat(direction, quat));
+  const snapped = snapDirectionToAxis(normalRaw, maxSnapAngleDeg);
+  const normal = snapped ?? normalRaw;
+
+  let half = applyQuat(half0, quat);
+  if (snapped) half = sub(half, scale(normal, dot(half, normal)));
+  if (norm(half) < 1e-9) half = cross(normal, { x: 0, y: 0, z: 1 });
+  if (norm(half) < 1e-9) half = cross(normal, { x: 1, y: 0, z: 0 });
+  half = scale(half, radius / norm(half));
+
+  return { nodes: [sub(center, half), add(center, half)], direction: normal };
+}
+
+/** 圆环电流源（螺线管展开成一叠这种环） */
+export interface LoopSource {
+  center: Vec3;
+  normal: Vec3;
+  radius: number;
+  current: number;
+}
+
+/** 每个螺线管最多展开成多少个圆环（每个圆环 = 一个场源） */
+const MAX_SOLENOID_LOOPS = 60;
+
+/**
+ * 螺线管 → 一叠同轴圆环。每个环带**完整的 I**（串联绕组的电流处处相同），
+ * 于是内部 B = μ0·(N/L)·I = μ0·n·I ✓，C++ 侧不需要知道"螺线管"这个概念。
+ */
+export function solenoidLoops(element: SceneElement): LoopSource[] {
+  const current = element.params.i ?? 0;
+  const turnsPerMeter = element.params.n ?? 0;
+  const radius = element.params.radius ?? 0;
+  const length = element.params.length ?? 0;
+  if (current === 0 || turnsPerMeter <= 0 || radius <= 0 || length <= 0) return [];
+
+  const turns = Math.max(2, Math.min(MAX_SOLENOID_LOOPS, Math.round(turnsPerMeter * length)));
+  // 建模环数被上限压缩时，每环电流要按比例放大，保证总安匝数不变：
+  // 等效面电流密度 K = n·I 必须保持，否则内部 B = μ0 n I 会差很大一截。
+  const loopCurrent = current * ((turnsPerMeter * length) / turns);
+
+  const normal = normalize(element.direction);
+  if (norm(normal) < 1e-9) return [];
+
+  const out: LoopSource[] = [];
+  for (let k = 0; k < turns; k += 1) {
+    const t = turns === 1 ? 0.5 : k / (turns - 1);
+    out.push({
+      center: add(element.position, scale(normal, (t - 0.5) * length)),
+      normal,
+      radius,
+      current: loopCurrent,
+    });
+  }
+  return out;
+}
+
+/** 该要素是否需要「移动/旋转」工具切换（即它的姿态有意义） */
+export function isRotatableElement(element: SceneElement): boolean {
+  if (element.kind === 'straightWire') return isTwoNodeCircle(element);
+  return element.kind === 'solenoid' || element.kind === 'dipole';
+}
+
 export function wireNodes(element: SceneElement): Vec3[] {
   return element.nodes ?? [];
 }

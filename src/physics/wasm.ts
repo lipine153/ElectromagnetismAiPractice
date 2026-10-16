@@ -1,4 +1,4 @@
-import { wireSegments } from '../scene/geometry';
+import { solenoidLoops, wireSegments } from '../scene/geometry';
 import { SOURCE_KIND, SOURCE_STRIDE, type SceneElement, type Vec3 } from '../scene/types';
 
 export interface TraceOptions {
@@ -37,6 +37,9 @@ function packParams(el: SceneElement): [number, number] {
       return [el.params.i ?? 0, el.params.turnsPerLength ?? 0];
     case 'dipole':
       return [el.params.m ?? 0, 0];
+    case 'solenoid':
+      // 螺线管在 TS 侧展开成圆环，这里不会用到，保留以穷尽类型
+      return [el.params.i ?? 0, el.params.radius ?? 0];
     case 'capacitor':
       return [el.params.q ?? 0, el.params.dqdt ?? 0];
   }
@@ -104,6 +107,13 @@ export class FieldEngine {
         const current = el.params.i ?? 0;
         for (const seg of wireSegments(el)) {
           push(SOURCE_KIND.straightWire, seg.a, seg.dir, current, seg.len);
+        }
+        continue;
+      }
+      if (el.kind === 'solenoid') {
+        // 螺线管 → 一叠圆环电流源
+        for (const loop of solenoidLoops(el)) {
+          push(SOURCE_KIND.currentLoop, loop.center, loop.normal, loop.current, loop.radius);
         }
         continue;
       }

@@ -1,5 +1,5 @@
 import { byId } from '../dom';
-import { levels } from './levels';
+import { levels, sandboxHref } from './levels';
 import { GameStore } from './state';
 import {
   paintHud,
@@ -28,6 +28,7 @@ export function createQuiz(): void {
   const slotsEl = byId('slots');
   const resetBtn = byId<HTMLButtonElement>('btn-reset');
   const submitBtn = byId<HTMLButtonElement>('btn-submit');
+  const sandboxLink = byId<HTMLAnchorElement>('btn-sandbox');
   const modal = byId('modal');
   const modalIcon = byId('modal-icon');
   const modalTitle = byId('modal-title');
@@ -62,6 +63,10 @@ export function createQuiz(): void {
 
     renderQuestion(questionEl, level);
     renderModel(modelEl, level);
+
+    // 「在沙盒中查看」：把本关的预设 id + 数值带过去（沙盒表示不了的关卡没有这个按钮）
+    sandboxLink.hidden = !level.sandbox;
+    if (level.sandbox) sandboxLink.href = sandboxHref(level.sandbox);
 
     optionButtons = renderOptions(optionsEl, level.options, (value) => {
       selected = selected === value ? null : value;
@@ -132,5 +137,17 @@ export function createQuiz(): void {
     }
   });
 
-  loadLevel(1);
+  loadLevel(Math.min(initialLevelFromHash(), store.totalLevels));
+
+  // 沙盒的「闯关」按钮会带 `#level=<n>` 回来；同一文档内改 hash 不重新加载，所以自己听
+  window.addEventListener('hashchange', () => {
+    loadLevel(Math.min(initialLevelFromHash(), store.totalLevels));
+  });
+}
+
+/** 深链：`quiz.html#level=<n>` 直接进第 n 关（沙盒的「闯关」按钮会带回来） */
+function initialLevelFromHash(): number {
+  const match = /(?:^|[#&])level=(\d+)/.exec(window.location.hash);
+  const level = match ? Number(match[1]) : 1;
+  return Number.isInteger(level) && level >= 1 ? level : 1;
 }

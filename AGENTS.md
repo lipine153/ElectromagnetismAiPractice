@@ -60,6 +60,11 @@ source each, `p0 = I`, `p1 = length`). The rules:
 | closed, 2 nodes | circle whose diameter is the node pair, discretised into 32 segments |
 | closed, >2 nodes | the polygon segments plus a closing last→first segment |
 
+**Solenoid** is expanded the same way: `solenoidLoops()` turns it into a stack of
+`kCurrentLoop` sources. Because the loop count is capped (`MAX_SOLENOID_LOOPS`), each loop's
+current is scaled by `(physical turns / modelled loops)` — otherwise the total ampere-turns
+(and therefore `B = μ0 n I`) comes out wrong by that factor.
+
 E/B seeds are built separately (`buildSeeds` for charges, `buildWireSeeds` for wires); the
 top-bar 线密度 slider drives both.
 
@@ -68,7 +73,18 @@ Wire gotchas:
   closed 2-node circle renders 33 centreline points but has only 2 real nodes — indexing
   handles off the centreline made "delete node 2" remove node 1.
 - Whole-wire translate and loop rotate are driven by **invisible proxy objects** (the
-  TransformControls target), so the transform is never fought over or reset mid-drag.
+  TransformControls target), so the transform is never fought over or reset mid-drag. Two
+  things this got wrong once:
+  - the rotate proxy's position is **midpoint of the two nodes** (= the circle's centre, since
+    the node pair *is* the diameter). It used to be `midpoint(world[0], world[1])`, i.e. two
+    *adjacent centreline samples* 11.25° apart, which put the gizmo out on the rim.
+  - rotating a loop must be a **rigid rotation about that centre** (`geometry.rotateLoop`:
+    both nodes *and* the normal turn together). Rewriting only the normal left the ring hinged
+    on its fixed diameter — and a spin about the ring's own axis didn't move it at all. The
+    handler feeds it the drag-start snapshot plus `Δ = q·q₀⁻¹` (TransformControls rotates in
+    world space as `q = Δ·q₀`), never per-frame increments, so nothing drifts.
+  - while `dragging`, `WireView.update` must **not** write the proxies back — TransformControls
+    owns the transform for the duration.
 
 Field-line gotchas (each of these was got wrong once already):
 - **Seeding**: every charge gets seed points and is traced *outward* by its own sign (positive
@@ -79,6 +95,11 @@ Field-line gotchas (each of these was got wrong once already):
   kept as density grows. An evenly-spread but *asymmetric* set (Fibonacci sphere) made a
   symmetric dipole render lopsided — measured: only 4/24 directions had a mirror partner and
   0/24 traced curves paired.
+- **Magnetic seeds** (`buildMagneticSeeds`) have their own two traps: a solenoid is axisymmetric
+  but that does *not* mean one meridian plane is enough — seeding in a single perpendicular
+  direction put **every** line in one plane, so the seeds must be spread over several azimuths
+  around the axis; and the point dipole has to use a **complete** direction set (`DENSITY_LEVELS`
+  entry, not a strided subset), because a subset of a symmetric set is no longer symmetric.
 - **Strength encoding**: one **global** log colour scale per field, spanning an adaptive 2–4
   decades of the scene's actual `|F|` range — never per-line normalisation, which makes every
   line span the whole ramp and hides the differences. On top of the colour, `fieldLines.ts`
@@ -95,9 +116,17 @@ Field-line gotchas (each of these was got wrong once already):
 ## Sandbox UI conventions (keep this feel — don't drift)
 The sandbox stays **minimal**: full-screen scene, one slim top bar, one collapsible left
 drawer. No permanent side panels, no wall of buttons ("中药铺"). If a new control affects the
-whole scene it goes in the top bar (field mode, 方向箭头, 线密度, and the 移动/旋转 wire tool
-that only appears while a rotatable loop is selected); anything per-element stays in
+whole scene it goes in the top bar (field mode, 方向箭头, 线密度, and the 移动/旋转 tool that only
+appears while a *rotatable* element is selected — `isRotatableElement`: a closed 2-node loop, a
+solenoid, a dipole); anything per-element stays in
 the drawer or the context menu.
+
+**`ElementViews.attach()` must sync `transform.mode` every call, not only when the attached
+object changes.** A wire flips tools by swapping objects (`translateProxy` ↔ `rotateProxy`), so
+an object-identity check happened to work for it; but a dipole/solenoid flips tools on the *same*
+mesh, so the check left the mode stuck on `translate` and the gizmo never changed. `TransformControls`
+also has exactly one gizmo, and `dragKind` (not `mode`) is what the `objectChange` handler
+dispatches on.
 - **Everything is selectable.** Click or right-click an element to select it; the selection
   drives both the drawer's properties section and the `TransformControls` gizmo. A newly added
   element is selected automatically.
@@ -125,6 +154,11 @@ the drawer or the context menu.
   and `src/physics/wasm.ts` (`packParams`). For `straightWire`, `pos` is the segment **start**,
   `dir` the unit direction and `p1` the length — its field is the analytic finite-segment
   Biot–Savart (see `cpp/src/field.cpp`); a huge `p1` is the "extends to infinity" idealisation.
+  `kCurrentLoop` (`pos` = centre, `dir` = normal, `p0` = I, `p1` = radius) uses the exact loop
+  field via complete elliptic integrals (AGM), and `kDipole` (`p0` = moment) the ideal dipole
+  formula. A solenoid is a stack of `kCurrentLoop`s (no C++-side solenoid concept). The dipole
+  *is* drawn as an arrow along its moment — note that is `direction × sign(p0)`, so a negative
+  moment points the arrow the other way, and the rotate handler must undo that sign.
 - **Seed encoding** for `_trace_lines`: flat `double[]`, stride 4 = `[x, y, z, sign]`
   (`sign < 0` traces against the field, used to draw lines arriving at negative charges).
 - **Exports** (set in `CMakeLists.txt`): `_malloc`, `_free`, `_set_sources`, `_trace_lines`,
@@ -156,6 +190,26 @@ Hard-won details if you touch that script:
   `rmSync` fail silently and the next build stacks on top of the old output.
 - Page sizes: `index.html` ~1.25 MB (the sandbox properties panel renders values as LaTeX via
   KaTeX, so the sandbox page carries KaTeX + its woff2 fonts), `quiz.html` ~0.65 MB.
+
+## 沙盒 ↔ 闯关 互通（深链）
+Two pages, two directions, and they must keep working in the offline build (both files are
+siblings, so plain relative links survive; no bundler rewriting).
+
+| 方向 | 地址 | 由谁写 |
+|---|---|---|
+| 沙盒 → 闯关 | `./quiz.html#level=<n>` | `simulate.ts`（顶栏的 `#link-quiz`），回跳到**同一关** |
+| 闯关 → 沙盒 | `./index.html#p=<预设 id>&<参数>=<数值>` | `game/levels.ts` 的 `sandboxHref()` |
+
+- The **preset definitions live only in `src/scene/presets.ts`** (sandbox side); the quiz never
+  builds a scene, it only names a preset id and passes that level's numbers. The two sides share
+  the id string and nothing else. URL params override the preset's defaults.
+- A level without a matching preset just omits `Level.sandbox` and the link stays `hidden` —
+  the sphere/dielectric/shell levels can't be represented by the sandbox's element kinds at all,
+  so don't invent one.
+- **Both pages need a `hashchange` listener.** The browser does *not* re-run scripts when only
+  the fragment changes, so `quiz.html` → `quiz.html#level=6` (or pasting a deep link into an
+  already-open tab) would otherwise be silently ignored. Related: when testing deep links by
+  automation, navigate via `about:blank` first, or you will "verify" a page that never reloaded.
 
 ## Verifying the Wasm from Node
 `package.json` has `"type": "module"`, so Node treats the CJS-style glue as ESM and

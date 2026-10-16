@@ -1,11 +1,12 @@
 import './styles/app.css';
 
-import { buildSeeds, buildWireSeeds } from './physics/seeds';
+import { buildMagneticSeeds, buildSeeds } from './physics/seeds';
 import { FieldEngine, type TraceOptions } from './physics/wasm';
 import { ElementViews } from './render/elements3d';
 import { FieldLines } from './render/fieldLines';
 import { createScene3D } from './render/scene3d';
 import { PALETTE, createElement } from './scene/catalog';
+import { readPresetFromHash } from './scene/presets';
 import { SceneStore } from './scene/store';
 import { vec3, type SceneElement } from './scene/types';
 import { createMenuHost, mountContextMenu } from './ui/contextMenu';
@@ -56,7 +57,10 @@ let lastTraceAt = 0;
 
 /** 阶段 2：磁学来自通电导线 */
 const hasMagneticSource = (list: readonly SceneElement[]): boolean =>
-  list.some((e) => e.kind === 'straightWire' && (e.params.i ?? 0) !== 0);
+  list.some(
+    (e) =>
+      (e.kind === 'straightWire' || e.kind === 'solenoid') && (e.params.i ?? 0) !== 0,
+  ) || list.some((e) => e.kind === 'dipole' && (e.params.m ?? 0) !== 0);
 
 function retrace(): void {
   if (!engine) return;
@@ -69,7 +73,7 @@ function retrace(): void {
   const eSeeds = buildSeeds(state.elements, state.lineDensity);
   fieldLines.update('E', wantE && eSeeds.length > 0 ? engine.trace('E', eSeeds, TRACE) : null);
 
-  const bSeeds = buildWireSeeds(state.elements, state.lineDensity);
+  const bSeeds = buildMagneticSeeds(state.elements, state.lineDensity);
   fieldLines.update('B', wantB && hasMagneticSource(state.elements) ? engine.trace('B', bSeeds, TRACE_B) : null);
 }
 
@@ -106,10 +110,39 @@ function seedDemoScene(): void {
   store.select(null);
 }
 
+/**
+ * 开局场景：带 `#p=...` 进来就用闯关那一关的预设，否则用默认示例。
+ * 顺带把「闯关」按钮指回**同一关**，这样两边来回跳不会每次都掉回第 1 关。
+ */
+function loadScene(hash: string): string | null {
+  store.clear();
+  const linked = readPresetFromHash(hash);
+
+  if (!linked) {
+    seedDemoScene();
+    return null;
+  }
+
+  for (const element of linked.preset.build(linked.params)) store.addElement(element);
+  store.setFieldMode(linked.preset.fieldMode);
+  store.select(null);
+
+  const back = document.getElementById('link-quiz');
+  if (back instanceof HTMLAnchorElement) back.href = `./quiz.html#level=${linked.preset.level}`;
+  return linked.preset.label;
+}
+
+/** 只在深链进来时补一句说明，别把默认的操作提示冲掉 */
+function showLinkHint(label: string | null): void {
+  const hint = document.getElementById('sim-hint');
+  if (!hint || !label) return;
+  hint.textContent = `已按闯关载入「${label}」 · ${hint.textContent}`;
+}
+
 FieldEngine.load()
   .then((loaded) => {
     engine = loaded;
-    seedDemoScene();
+    showLinkHint(loadScene(window.location.hash));
     retraceDirty = true;
     document.body.classList.add('sim-ready');
   })
@@ -118,3 +151,10 @@ FieldEngine.load()
     const hint = document.getElementById('sim-hint');
     if (hint) hint.textContent = '物理引擎加载失败，请看控制台。';
   });
+
+// 同文档内改 hash 不会触发重新加载（浏览器只换 fragment），所以自己听一下：
+// 这样「把深链粘到已打开的沙盒页」也能生效
+window.addEventListener('hashchange', () => {
+  showLinkHint(loadScene(window.location.hash));
+  retraceDirty = true;
+});

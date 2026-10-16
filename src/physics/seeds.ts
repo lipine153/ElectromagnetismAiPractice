@@ -1,4 +1,4 @@
-import { normalize, wireCenterline } from '../scene/geometry';
+import { norm, normalize, wireCenterline } from '../scene/geometry';
 import type { SceneElement, Vec3 } from '../scene/types';
 
 const SEED_RADIUS = 0.15;
@@ -179,16 +179,71 @@ function samplePolyline(
  * 每个 (沿程位置, 半径) 只放一个种子——同一半径绕导线一圈本就是同一条磁力线，
  * 多放只会重复绘制。
  */
-export function buildWireSeeds(elements: readonly SceneElement[], level = 0): Float64Array {
+export function buildMagneticSeeds(elements: readonly SceneElement[], level = 0): Float64Array {
   const cfg = WIRE_SEED_LEVELS[clampDensity(level)];
   const out: number[] = [];
 
+  const pushPoint = (p: Vec3): void => {
+    out.push(p.x, p.y, p.z, 1);
+  };
   const pushSeed = (base: Vec3, tangent: Vec3, radius: number): void => {
     const [u] = perpendicularBasis(tangent);
-    out.push(base.x + u.x * radius, base.y + u.y * radius, base.z + u.z * radius, 1);
+    pushPoint({ x: base.x + u.x * radius, y: base.y + u.y * radius, z: base.z + u.z * radius });
   };
 
   for (const element of elements) {
+    if (element.kind === 'solenoid') {
+      // 管内、管外都要撒；而且必须**绕轴多个方位**，否则所有线都会挤在同一个子午面里
+      if ((element.params.i ?? 0) === 0) continue;
+      const axis = normalize(element.direction);
+      const radius = element.params.radius ?? 0.5;
+      const length = element.params.length ?? 2;
+      if (norm(axis) < 1e-9) continue;
+
+      const [u, v] = perpendicularBasis(axis);
+      const along = 4;
+      const azimuths = 6;
+      for (let k = 0; k < along; k += 1) {
+        const t = (k + 0.5) / along;
+        const base = {
+          x: element.position.x + axis.x * (t - 0.5) * length,
+          y: element.position.y + axis.y * (t - 0.5) * length,
+          z: element.position.z + axis.z * (t - 0.5) * length,
+        };
+        for (const factor of [0.35, 1.5]) {
+          for (let a = 0; a < azimuths; a += 1) {
+            const angle = (2 * Math.PI * a) / azimuths;
+            const r = radius * factor;
+            const cos = Math.cos(angle) * r;
+            const sin = Math.sin(angle) * r;
+            pushPoint({
+              x: base.x + u.x * cos + v.x * sin,
+              y: base.y + u.y * cos + v.y * sin,
+              z: base.z + u.z * cos + v.z * sin,
+            });
+          }
+        }
+      }
+      continue;
+    }
+
+    if (element.kind === 'dipole') {
+      if ((element.params.m ?? 0) === 0) continue;
+      // 点偶极子：用**完整**的对称方向集撒种（不能抽子集，抽出来就不对称了）
+      const directions = DENSITY_LEVELS[clampDensity(level) === 2 ? 1 : 0];
+      const radii = [0.6, 1.2];
+      for (const [dx, dy, dz] of directions) {
+        for (const radius of radii) {
+          pushPoint({
+            x: element.position.x + dx * radius,
+            y: element.position.y + dy * radius,
+            z: element.position.z + dz * radius,
+          });
+        }
+      }
+      continue;
+    }
+
     if (element.kind !== 'straightWire' || (element.params.i ?? 0) === 0) continue;
 
     const { points, closed } = wireCenterline(element);

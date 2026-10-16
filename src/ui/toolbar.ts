@@ -1,4 +1,4 @@
-import { isTwoNodeCircle } from '../scene/geometry';
+import { isRotatableElement } from '../scene/geometry';
 import { DENSITY_LABELS, DENSITY_LEVELS } from '../physics/seeds';
 import type { SceneStore } from '../scene/store';
 import type { FieldMode, WireTool } from '../scene/types';
@@ -58,7 +58,7 @@ export function mountToolbar(store: SceneStore, root: ParentNode = document): vo
     if (densityLabel) densityLabel.textContent = DENSITY_LABELS[state.lineDensity] ?? '—';
 
     const selected = state.elements.find((e) => e.id === state.selectedId);
-    if (toolBox) toolBox.hidden = !(selected && isTwoNodeCircle(selected));
+    if (toolBox) toolBox.hidden = !(selected && isRotatableElement(selected));
     for (const btn of toolButtons) btn.classList.toggle('is-active', btn.dataset.tool === state.wireTool);
     const showE = state.fieldMode !== 'B';
     const showB = state.fieldMode !== 'E';
